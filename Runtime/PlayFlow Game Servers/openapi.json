@@ -1,0 +1,1162 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "PlayFlow Production API",
+      "description": "API for managing game servers across different providers",
+      "version": "0.2.0"
+    },
+    "paths": {
+      "/v2/servers/": {
+        "get": {
+          "tags": [
+            "Servers"
+          ],
+          "summary": "List Game Servers",
+          "description": "Retrieves a list of game servers for the authenticated project. Use the query parameter to include servers that are still launching.",
+          "operationId": "list_servers_endpoint_v2_servers__get",
+          "parameters": [
+            {
+              "name": "include_launching",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "description": "Include servers in 'launching' state.",
+                "default": false,
+                "title": "Include Launching"
+              },
+              "description": "Include servers in 'launching' state."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerList"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v2/servers/start": {
+        "post": {
+          "tags": [
+            "Servers"
+          ],
+          "summary": "Start a New Game Server",
+          "description": "Provisions and starts a new game server instance based on the provided configuration. Requires an active Pro plan subscription.",
+          "operationId": "start_server_endpoint_v2_servers_start_post",
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerCreateRequest",
+                  "description": "Configuration for the new server."
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerStartResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v2/servers/{instance_id}": {
+        "delete": {
+          "tags": [
+            "Servers"
+          ],
+          "summary": "Stop a Game Server",
+          "description": "Stops the specified game server instance, associated cloud resources (if applicable), and DNS records.",
+          "operationId": "stop_server_endpoint_v2_servers__instance_id__delete",
+          "parameters": [
+            {
+              "name": "instance_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "Unique identifier (UUID) of the server instance to stop.",
+                "examples": [
+                  "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                ],
+                "title": "Instance Id"
+              },
+              "description": "Unique identifier (UUID) of the server instance to stop."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerStopResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Servers"
+          ],
+          "summary": "Get Game Server Details",
+          "description": "Retrieves details for a specific game server by its ID.",
+          "operationId": "get_server_endpoint_v2_servers__instance_id__get",
+          "parameters": [
+            {
+              "name": "instance_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "Unique identifier (UUID) of the server instance to retrieve.",
+                "examples": [
+                  "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                ],
+                "title": "Instance Id"
+              },
+              "description": "Unique identifier (UUID) of the server instance to retrieve."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Instance"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v2/servers/{instance_id}/update": {
+        "put": {
+          "tags": [
+            "Servers"
+          ],
+          "summary": "Update Server Status and IP",
+          "description": "Typically called by a game server instance itself upon successful launch to report its public IP address and confirm it is running.",
+          "operationId": "update_server_status_endpoint_v2_servers__instance_id__update_put",
+          "parameters": [
+            {
+              "name": "instance_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "Unique identifier (UUID) of the server instance reporting its status.",
+                "title": "Instance Id"
+              },
+              "description": "Unique identifier (UUID) of the server instance reporting its status."
+            },
+            {
+              "name": "X-Server-Status",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "The status the server is reporting (e.g., 'running').",
+                "title": "X-Server-Status"
+              },
+              "description": "The status the server is reporting (e.g., 'running')."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Instance"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v2/builds/builds": {
+        "get": {
+          "tags": [
+            "Server Image Management"
+          ],
+          "summary": "List Builds",
+          "description": "List all active builds for this project.",
+          "operationId": "list_builds_v2_builds_builds_get",
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/BuildListResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v2/builds/builds/upload": {
+        "post": {
+          "tags": [
+            "Server Image Management"
+          ],
+          "summary": "Upload Build",
+          "description": "Upload a server build file.",
+          "operationId": "upload_build_v2_builds_builds_upload_post",
+          "parameters": [
+            {
+              "name": "name",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "description": "Name for the build.",
+                "default": "default",
+                "title": "Name"
+              },
+              "description": "Name for the build."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_upload_build_v2_builds_builds_upload_post"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/BuildUploadResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v2/builds/builds/{name}": {
+        "get": {
+          "tags": [
+            "Server Image Management"
+          ],
+          "summary": "Get Build",
+          "description": "Get a build with the specified name.",
+          "operationId": "get_build_v2_builds_builds__name__get",
+          "parameters": [
+            {
+              "name": "name",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "Name of the build to retrieve.",
+                "title": "Name"
+              },
+              "description": "Name of the build to retrieve."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/BuildDetailResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Server Image Management"
+          ],
+          "summary": "Delete Build",
+          "description": "Delete a build with the specified name.",
+          "operationId": "delete_build_v2_builds_builds__name__delete",
+          "parameters": [
+            {
+              "name": "name",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "Name of the build to delete.",
+                "title": "Name"
+              },
+              "description": "Name of the build to delete."
+            },
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "description": "PlayFlow API Key",
+                "title": "Api-Key"
+              },
+              "description": "PlayFlow API Key"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/BuildDeleteResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/health": {
+        "get": {
+          "tags": [
+            "health"
+          ],
+          "summary": "Health Check",
+          "description": "Health check endpoint.",
+          "operationId": "health_check_health_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "Body_upload_build_v2_builds_builds_upload_post": {
+          "properties": {
+            "file": {
+              "type": "string",
+              "format": "binary",
+              "title": "File",
+              "description": "Server build file to upload."
+            }
+          },
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "title": "Body_upload_build_v2_builds_builds_upload_post"
+        },
+        "BuildDeleteResponse": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status",
+              "default": "success"
+            },
+            "message": {
+              "type": "string",
+              "title": "Message",
+              "default": "Build deleted successfully"
+            }
+          },
+          "type": "object",
+          "title": "BuildDeleteResponse",
+          "description": "Response model for deleting a build."
+        },
+        "BuildDetailResponse": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "build": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BuildResponse"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "found": {
+              "type": "boolean",
+              "title": "Found"
+            },
+            "message": {
+              "type": "string",
+              "title": "Message"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "found",
+            "message"
+          ],
+          "title": "BuildDetailResponse"
+        },
+        "BuildListResponse": {
+          "properties": {
+            "builds": {
+              "items": {
+                "$ref": "#/components/schemas/BuildResponse"
+              },
+              "type": "array",
+              "title": "Builds"
+            },
+            "total_builds": {
+              "type": "integer",
+              "title": "Total Builds"
+            }
+          },
+          "type": "object",
+          "required": [
+            "builds",
+            "total_builds"
+          ],
+          "title": "BuildListResponse"
+        },
+        "BuildResponse": {
+          "properties": {
+            "build_id": {
+              "type": "string",
+              "title": "Build Id"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "version": {
+              "type": "integer",
+              "title": "Version"
+            },
+            "status": {
+              "$ref": "#/components/schemas/BuildState"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "build_id",
+            "name",
+            "version",
+            "status",
+            "created_at"
+          ],
+          "title": "BuildResponse",
+          "description": "Response model for a single build."
+        },
+        "BuildState": {
+          "type": "string",
+          "enum": [
+            "uploading",
+            "ready",
+            "failed",
+            "deleted"
+          ],
+          "title": "BuildState",
+          "description": "Possible states for a build."
+        },
+        "BuildUploadResponse": {
+          "properties": {
+            "build_id": {
+              "type": "string",
+              "title": "Build Id"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name",
+              "default": "default"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status",
+              "default": "upload_started"
+            },
+            "message": {
+              "type": "string",
+              "title": "Message",
+              "default": "Build upload started successfully"
+            },
+            "version": {
+              "type": "integer",
+              "title": "Version"
+            },
+            "file_size": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "File Size"
+            },
+            "upload_time": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Upload Time"
+            }
+          },
+          "type": "object",
+          "required": [
+            "build_id",
+            "version"
+          ],
+          "title": "BuildUploadResponse",
+          "description": "Response model for a build upload."
+        },
+        "ComputeSize": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large",
+            "xlarge",
+            "dedicated-small",
+            "dedicated-medium",
+            "dedicated-large",
+            "dedicated-xlarge"
+          ],
+          "title": "ComputeSize",
+          "description": "Enum for server compute sizes."
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "Instance": {
+          "properties": {
+            "instance_id": {
+              "type": "string",
+              "title": "Instance Id"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "network_ports": {
+              "items": {
+                "$ref": "#/components/schemas/PortMapping"
+              },
+              "type": "array",
+              "title": "Network Ports"
+            },
+            "status": {
+              "$ref": "#/components/schemas/InstanceState",
+              "default": "launching"
+            },
+            "startup_args": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Startup Args",
+              "default": ""
+            },
+            "service_type": {
+              "$ref": "#/components/schemas/ServiceType",
+              "default": "match_based"
+            },
+            "compute_size": {
+              "type": "string",
+              "title": "Compute Size",
+              "default": ""
+            },
+            "region": {
+              "type": "string",
+              "title": "Region",
+              "default": ""
+            },
+            "version_tag": {
+              "type": "string",
+              "title": "Version Tag",
+              "default": ""
+            },
+            "started_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Started At"
+            },
+            "stopped_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stopped At"
+            },
+            "custom_data": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Custom Data"
+            },
+            "ttl": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ttl"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "title": "Instance"
+        },
+        "InstanceState": {
+          "type": "string",
+          "enum": [
+            "launching",
+            "running",
+            "stopped"
+          ],
+          "title": "InstanceState"
+        },
+        "PortMapping": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name",
+              "description": "Friendly name for this port (e.g., 'game_udp', 'game_tcp')"
+            },
+            "internal_port": {
+              "type": "integer",
+              "title": "Internal Port",
+              "description": "The port the application listens on inside the VM/container."
+            },
+            "external_port": {
+              "type": "integer",
+              "title": "External Port",
+              "description": "The public-facing port clients connect to."
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "udp",
+                "tcp"
+              ],
+              "title": "Protocol",
+              "description": "The network protocol."
+            },
+            "host": {
+              "type": "string",
+              "title": "Host",
+              "description": "The public IP address or domain name clients connect to."
+            },
+            "tls_enabled": {
+              "type": "boolean",
+              "title": "Tls Enabled",
+              "description": "Whether TLS termination is enabled for this port (only applicable for TCP).",
+              "default": false
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "internal_port",
+            "external_port",
+            "protocol",
+            "host"
+          ],
+          "title": "PortMapping",
+          "description": "Represents the configuration and connection details for a single network port."
+        },
+        "ServerCreateRequest": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name",
+              "description": "The name of the server instance"
+            },
+            "startup_args": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Startup Args",
+              "description": "Custom arguments to pass to the server"
+            },
+            "region": {
+              "type": "string",
+              "title": "Region",
+              "description": "Region for the server deployment. Must be a valid PlayFlow region."
+            },
+            "compute_size": {
+              "$ref": "#/components/schemas/ComputeSize",
+              "description": "Server size type - affects resources and pricing",
+              "default": "small"
+            },
+            "version_tag": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version Tag",
+              "description": "Server version tag"
+            },
+            "ttl": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 86400,
+                  "minimum": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ttl",
+              "description": "Time to live for the server in seconds (60-86400)"
+            },
+            "custom_data": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Custom Data",
+              "description": "Custom data to pass to the server"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "region"
+          ],
+          "title": "ServerCreateRequest",
+          "description": "Request schema for creating a new server."
+        },
+        "ServerList": {
+          "properties": {
+            "total_servers": {
+              "type": "integer",
+              "title": "Total Servers",
+              "description": "Number of servers"
+            },
+            "servers": {
+              "items": {
+                "$ref": "#/components/schemas/Instance"
+              },
+              "type": "array",
+              "title": "Servers",
+              "description": "List of servers"
+            }
+          },
+          "type": "object",
+          "required": [
+            "total_servers",
+            "servers"
+          ],
+          "title": "ServerList",
+          "description": "Schema for list of servers."
+        },
+        "ServerStartResponse": {
+          "properties": {
+            "instance_id": {
+              "type": "string",
+              "title": "Instance Id",
+              "description": "Unique server instance ID"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name",
+              "description": "Server name"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status",
+              "description": "Server status (always 'launching' for new servers)",
+              "default": "launching"
+            },
+            "region": {
+              "type": "string",
+              "title": "Region",
+              "description": "Provider region"
+            },
+            "network_ports": {
+              "items": {
+                "$ref": "#/components/schemas/PortMapping"
+              },
+              "type": "array",
+              "title": "Network Ports",
+              "description": "List of network port mappings with connectivity information including IPs, internal and external ports, and protocols"
+            },
+            "compute_size": {
+              "type": "string",
+              "title": "Compute Size",
+              "description": "Server compute size",
+              "default": "small"
+            },
+            "version_tag": {
+              "type": "string",
+              "title": "Version Tag",
+              "description": "Server version tag",
+              "default": ""
+            },
+            "started_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Started At",
+              "description": "Server start time"
+            }
+          },
+          "type": "object",
+          "required": [
+            "instance_id",
+            "name",
+            "region"
+          ],
+          "title": "ServerStartResponse",
+          "description": "Schema for server start response."
+        },
+        "ServerStopResponse": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status",
+              "description": "Status of the server stop operation"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "title": "ServerStopResponse",
+          "description": "Schema for server stop response."
+        },
+        "ServiceType": {
+          "type": "string",
+          "enum": [
+            "match_based",
+            "persistent_world"
+          ],
+          "title": "ServiceType"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      }
+    }
+  }

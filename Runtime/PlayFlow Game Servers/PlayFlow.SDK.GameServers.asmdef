@@ -1,0 +1,16 @@
+{
+  "name": "PlayFlow.SDK.GameServers",
+  "rootNamespace": "PlayFlow.SDK.GameServers",
+  "references": [
+    "PlayFlow.SDK"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

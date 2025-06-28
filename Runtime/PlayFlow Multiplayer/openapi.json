@@ -1,0 +1,858 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+      "title": "Matchmaking Service API",
+      "version": "1.0.0",
+      "description": "RESTful API for managing matchmaking tickets and matches. **Requires API key in the `api-key` header for all requests.**"
+    },
+    "servers": [
+      {
+        "url": "/",
+        "description": "Default server"
+      }
+    ],
+    "components": {
+      "securitySchemes": {
+        "ApiKeyAuth": {
+          "type": "apiKey",
+          "in": "header",
+          "name": "api-key",
+          "description": "API key for authentication"
+        }
+      },
+      "parameters": {
+        "ApiKeyHeader": {
+          "name": "api-key",
+          "in": "header",
+          "description": "API key for authentication",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      },
+      "schemas": {
+        "Ticket": {
+          "type": "object",
+          "properties": {
+            "ticket_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Unique identifier for the ticket",
+              "example": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+            },
+            "player_id": {
+              "type": "string",
+              "description": "Unique identifier for the player",
+              "example": "player_123"
+            },
+            "matchmaker_id": {
+              "type": "string",
+              "description": "Identifier of the matchmaker this ticket belongs to",
+              "example": "c0c17d62-890e-4788-83e0-f16be8db4901"
+            },
+            "status": {
+              "type": "string",
+              "description": "Current status of the ticket",
+              "enum": [
+                "In Queue",
+                "matched",
+                "cancelled",
+                "expired",
+                "deleted",
+                "abandoned"
+              ],
+              "example": "In Queue"
+            },
+            "created_at": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Timestamp of when the ticket was created (Unix epoch milliseconds)",
+              "example": 1678886400000
+            },
+            "elo": {
+              "type": "integer",
+              "description": "Player's skill rating",
+              "example": 1250
+            },
+            "gameBuild": {
+              "type": "string",
+              "description": "Game build version associated with the ticket",
+              "example": "Build_1.2.3"
+            },
+            "regions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Player's selected regions",
+              "example": [
+                "NA-East",
+                "EU-West"
+              ]
+            },
+            "match": {
+              "type": "object",
+              "nullable": true,
+              "description": "Details of the match if the ticket status is 'matched'.",
+              "properties": {
+                "match_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "ID of the match the ticket is assigned to",
+                  "example": "m1n2o3p4-q5r6-7890-1234-567890ghijkl"
+                },
+                "server": {
+                  "type": "object",
+                  "description": "Details of the game server assigned to the match",
+                  "properties": {
+                    "server_id": {
+                      "type": "string",
+                      "example": "srv_abc123"
+                    },
+                    "connect_code": {
+                      "type": "string",
+                      "example": "XYZ123"
+                    },
+                    "connection_info": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "example": "game"
+                          },
+                          "connection_string": {
+                            "type": "string",
+                            "example": "127.0.0.1:7777"
+                          },
+                          "protocol": {
+                            "type": "string",
+                            "example": "udp"
+                          },
+                          "port": {
+                            "type": "integer",
+                            "example": 7777
+                          },
+                          "host": {
+                            "type": "string",
+                            "example": "127.0.0.1"
+                          },
+                          "tls_enabled": {
+                            "type": "boolean",
+                            "example": false
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "created_at": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Timestamp of when the match was created",
+                  "example": 1678886500000
+                },
+                "players": {
+                  "type": "integer",
+                  "description": "Number of players in the match",
+                  "example": 8
+                }
+              }
+            }
+          },
+          "required": [
+            "ticket_id",
+            "player_id",
+            "matchmaker_id",
+            "status",
+            "created_at"
+          ]
+        },
+        "Match": {
+          "type": "object",
+          "properties": {
+            "match_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Unique identifier for the match",
+              "example": "m1n2o3p4-q5r6-7890-1234-567890ghijkl"
+            },
+            "matchmaker_id": {
+              "type": "string",
+              "description": "Identifier of the matchmaker this match belongs to",
+              "example": "c0c17d62-890e-4788-83e0-f16be8db4901"
+            },
+            "gameBuild": {
+              "type": "string",
+              "description": "Game build version for this match",
+              "example": "Build_1.2.3"
+            },
+            "status": {
+              "type": "string",
+              "description": "Current status of the match",
+              "enum": [
+                "created",
+                "active",
+                "ended",
+                "failed"
+              ],
+              "example": "active"
+            },
+            "created_at": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Timestamp of when the match was created (Unix epoch milliseconds)",
+              "example": 1678886500000
+            },
+            "backfill": {
+              "type": "boolean",
+              "description": "Indicates if backfill is enabled for this match",
+              "example": true
+            },
+            "maxPlayers": {
+              "type": "integer",
+              "description": "Maximum number of players allowed in this match",
+              "example": 10
+            },
+            "currentPlayers": {
+              "type": "integer",
+              "description": "Current number of players in this match",
+              "example": 8
+            },
+            "players": {
+              "type": "array",
+              "description": "List of players in the match",
+              "items": {
+                "$ref": "#/components/schemas/Ticket"
+              }
+            },
+            "teams": {
+              "type": "array",
+              "description": "Team assignments for the players (if applicable)",
+              "nullable": true,
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            },
+            "server": {
+              "type": "object",
+              "nullable": true,
+              "properties": {
+                "server_id": {
+                  "type": "string",
+                  "example": "srv_abc123"
+                },
+                "name": {
+                  "type": "string",
+                  "example": "match-xyz-server"
+                },
+                "status": {
+                  "type": "string",
+                  "example": "launching"
+                },
+                "region": {
+                  "type": "string",
+                  "example": "us-east"
+                },
+                "compute_size": {
+                  "type": "string",
+                  "example": "small"
+                },
+                "started_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2023-03-15T10:00:00Z"
+                },
+                "ttl": {
+                  "type": "integer",
+                  "example": 3600
+                },
+                "connect_code": {
+                  "type": "string",
+                  "example": "XYZ123"
+                },
+                "game_build": {
+                  "type": "string",
+                  "example": "Build_1.2.3"
+                },
+                "is_mock": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "provisioned_at": {
+                  "type": "integer",
+                  "format": "int64",
+                  "example": 1678886500000
+                },
+                "connection_info": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "example": "game"
+                      },
+                      "connection_string": {
+                        "type": "string",
+                        "example": "127.0.0.1:7777"
+                      },
+                      "protocol": {
+                        "type": "string",
+                        "example": "udp"
+                      },
+                      "port": {
+                        "type": "integer",
+                        "example": 7777
+                      },
+                      "host": {
+                        "type": "string",
+                        "example": "127.0.0.1"
+                      },
+                      "tls_enabled": {
+                        "type": "boolean",
+                        "example": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": [
+            "match_id",
+            "matchmaker_id",
+            "gameBuild",
+            "status",
+            "created_at",
+            "players"
+          ]
+        }
+      }
+    },
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "paths": {
+      "/tickets": {
+        "post": {
+          "tags": [
+            "Matchmaking"
+          ],
+          "summary": "Create a new matchmaking ticket",
+          "description": "Creates a ticket that will be processed by the matchmaker",
+          "security": [
+            {
+              "ApiKeyAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "description": "API key for authentication",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "matchmaker_name"
+                  ],
+                  "properties": {
+                    "matchmaker_name": {
+                      "type": "string",
+                      "description": "Name of the matchmaker configuration"
+                    },
+                    "player_id": {
+                      "type": "string",
+                      "description": "The player's unique identifier"
+                    },
+                    "region": {
+                      "type": "string",
+                      "description": "Geographic region for matchmaking"
+                    },
+                    "elo": {
+                      "type": "integer",
+                      "description": "Player's skill rating",
+                      "default": 1000
+                    },
+                    "preferred_modes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Preferred game modes"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Ticket created successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "ticket_id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "In Queue"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid request parameters"
+            },
+            "404": {
+              "description": "Matchmaker not found"
+            },
+            "500": {
+              "description": "Server error"
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Matchmaking"
+          ],
+          "summary": "List all active (queued) tickets for a matchmaker",
+          "description": "Retrieves a list of all tickets currently in the queue for the specified matchmaker.",
+          "security": [
+            {
+              "ApiKeyAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "description": "API key for authentication",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "matchmaker_name",
+              "in": "query",
+              "required": true,
+              "description": "Name of the matchmaker",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "A list of active tickets",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Ticket"
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid request parameters"
+            },
+            "404": {
+              "description": "Matchmaker not found"
+            },
+            "500": {
+              "description": "Server error"
+            }
+          }
+        }
+      },
+      "/tickets/{id}": {
+        "delete": {
+          "tags": [
+            "Matchmaking"
+          ],
+          "summary": "Cancel a ticket or leave a match",
+          "description": "Removes a player from the matchmaking system - either cancels their ticket in queue or marks them as having left a match",
+          "security": [
+            {
+              "ApiKeyAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "description": "API key for authentication",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "description": "ID of the ticket to cancel or leave a match with",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "matchmaker_name",
+              "in": "query",
+              "required": true,
+              "description": "Name of the matchmaker",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successfully removed player from matchmaking",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "message": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "cancelled"
+                            ]
+                          },
+                          "ticket_id": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "message": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "abandoned"
+                            ]
+                          },
+                          "ticket_id": {
+                            "type": "string"
+                          },
+                          "match_id": {
+                            "type": "string"
+                          },
+                          "match_status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "closed"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid request"
+            },
+            "404": {
+              "description": "Ticket not found in queue or any active match"
+            },
+            "500": {
+              "description": "Server error"
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Matchmaking"
+          ],
+          "summary": "Get ticket or player status",
+          "description": "Retrieves a ticket's status by ticket ID or retrieves a player's current matchmaking status by player ID",
+          "security": [
+            {
+              "ApiKeyAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "description": "API key for authentication",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "description": "ID of the ticket or player to check",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "matchmaker_name",
+              "in": "query",
+              "required": false,
+              "description": "Optional name of the matchmaker. Required for ticket lookup, optional for player lookup.",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "type",
+              "in": "query",
+              "required": false,
+              "description": "Type of ID provided: 'ticket' (default) or 'player'",
+              "schema": {
+                "type": "string",
+                "enum": [
+                  "ticket",
+                  "player"
+                ]
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Ticket or player status information",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "description": "Ticket information"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "in_queue",
+                              "matched",
+                              "none"
+                            ],
+                            "description": "The player's current status"
+                          },
+                          "matchmaker_name": {
+                            "type": "string",
+                            "description": "The name of the matchmaker where the player is active (if applicable)"
+                          },
+                          "ticket": {
+                            "type": "object",
+                            "description": "The player's ticket (if in queue)"
+                          },
+                          "match": {
+                            "type": "object",
+                            "description": "Match information (if matched)"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Ticket not found"
+            },
+            "500": {
+              "description": "Server error"
+            }
+          }
+        }
+      },
+      "/matches": {
+        "get": {
+          "tags": [
+            "Matchmaking"
+          ],
+          "summary": "List all active matches for a matchmaker",
+          "description": "Retrieves a list of all currently active matches for the specified matchmaker.",
+          "security": [
+            {
+              "ApiKeyAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "description": "API key for authentication",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "matchmaker_name",
+              "in": "query",
+              "required": true,
+              "description": "Name of the matchmaker",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "A list of active matches",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Match"
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid request parameters"
+            },
+            "404": {
+              "description": "Matchmaker not found"
+            },
+            "500": {
+              "description": "Server error"
+            }
+          }
+        }
+      },
+      "/matches/{id}": {
+        "delete": {
+          "tags": [
+            "Matchmaking"
+          ],
+          "summary": "Delete a match",
+          "description": "Deletes a match from the system and cleans up associated data (e.g., when a game server reports the match has ended).",
+          "security": [
+            {
+              "ApiKeyAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "api-key",
+              "in": "header",
+              "required": true,
+              "description": "API key for authentication",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "description": "ID of the match to delete",
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "matchmaker_name",
+              "in": "query",
+              "required": true,
+              "description": "Name of the matchmaker",
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Match deleted and cleaned up successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string"
+                      },
+                      "match_id": {
+                        "type": "string"
+                      },
+                      "matchmaker_id": {
+                        "type": "string"
+                      },
+                      "player_count": {
+                        "type": "integer",
+                        "description": "Number of players in the match that was deleted"
+                      },
+                      "tickets_cleaned": {
+                        "type": "integer",
+                        "description": "Number of ticket references cleaned up"
+                      },
+                      "missing_ticket_count": {
+                        "type": "integer",
+                        "description": "Number of players whose tickets were already missing"
+                      },
+                      "server_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid request parameters"
+            },
+            "404": {
+              "description": "Match or matchmaker not found"
+            },
+            "500": {
+              "description": "Server error"
+            }
+          }
+        }
+      }
+    },
+    "tags": []
+  }

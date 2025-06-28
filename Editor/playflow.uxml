@@ -1,0 +1,56 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="Styles.uss" />
+    <ui:ScrollView view-data-key="mainscroll" style="height: 100%; width: 100%; justify-content: flex-end;">
+        <ui:VisualElement style="align-items: center; justify-content: space-around; background-color: rgb(17, 17, 17); -unity-text-outline-color: rgb(0, 0, 0); width: 100%;">
+            <ui:VisualElement tooltip="Start Server will launch a new server. If you already have a server running and want to test a new uploaded server quickly, you can use the update server button" style="background-image: resource('playflow'); width: 256px; height: 256px; justify-content: space-around; align-items: stretch; position: relative; top: auto; left: auto; visibility: visible; overflow: visible; display: flex; -unity-background-scale-mode: scale-to-fit; scale: 1 1; margin-bottom: -25px; margin-top: -50px; background-color: rgba(255, 255, 255, 0);" />
+            <ui:VisualElement name="VisualElement" style="flex-grow: 1; height: auto; width: 100%; overflow: visible; visibility: visible; padding-bottom: 5px; margin-top: -30px;">
+                <ui:GroupBox style="flex-direction: row; justify-content: space-between; align-items: center; padding: 0; margin: 0; width: 100%; flex-shrink: 0;">
+                    <ui:Button tabindex="-1" name="QuickStart" class="button-with-icon" style="width: 24%; margin: 0 0.5%; padding: 0; flex-direction: row-reverse;">
+                        <ui:Label text="Quick Start" class="button-label" />
+                        <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/lightning-icon&apos;);" />
+                    </ui:Button>
+                    <ui:Button tabindex="-1" name="ButtonDocumentation" class="button-with-icon" style="width: 24%; margin: 0 0.5%; padding: 0; flex-direction: row-reverse;">
+                        <ui:Label text="Documentation" class="button-label" />
+                        <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/documentation-icon&apos;);" />
+                    </ui:Button>
+                    <ui:Button tabindex="-1" name="ButtonDiscord" class="button-with-icon" style="width: 24%; margin: 0 0.5%; padding: 0; flex-direction: row-reverse;">
+                        <ui:Label text="Discord" class="button-label" />
+                        <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/icon-social&apos;);" />
+                    </ui:Button>
+                    <ui:Button tabindex="-1" name="ButtonPricing" class="button-with-icon" style="width: 24%; margin: 0 0.5%; padding: 0; flex-direction: row-reverse;">
+                        <ui:Label text="Pricing" class="button-label" />
+                        <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/price-tag&apos;);" />
+                    </ui:Button>
+                </ui:GroupBox>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:ProgressBar title="progress" name="progress" style="display: none;" />
+        <ui:VisualElement style="flex-grow: 1; width: 100%; height: 100%; padding-right: 11px;">
+            <ui:Button tabindex="-1" name="ButtonGetToken" class="button-with-icon" style="width: 100%; flex-direction: row-reverse;">
+                <ui:Label text="Get Token" class="button-label" />
+                <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/key-icon&apos;); -unity-background-scale-mode: scale-to-fit;" />
+            </ui:Button>
+            <ui:TextField picking-mode="Ignore" label="Token" name="TextToken" view-data-key="token" password="true" />
+            <ui:Toggle label="Development Build" name="DevelopmentBuild" view-data-key="DevelopmentBuild" style="flex-direction: row; height: auto; align-items: auto; justify-content: space-around;" />
+            <ui:Toggle label="Use Build Settings Scene List" name="UseBuildSettings" view-data-key="UseBuildSettings" style="flex-direction: row; align-items: auto; justify-content: space-between;" />
+            <ui:DropdownField label="Server Scene" index="-1" choices="System.Collections.Generic.List`1[System.String]" name="sceneDropDown" view-data-key="sceneDropDown" />
+            <ui:TextField picking-mode="Ignore" label="Build Version" name="servertag" view-data-key="servertag" password="false" value="default" />
+            <ui:GroupBox style="align-items: center; justify-content: space-around; flex-direction: row; width: auto; margin-left: 0;">
+                <ui:Button name="ButtonUpload" class="button-with-icon" style="width: 49%; flex-direction: row-reverse;">
+                    <ui:Label text="Upload Server" class="button-label" />
+                    <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/cloud-upload-icon&apos;);" />
+                </ui:Button>
+                <ui:Button name="ButtonUploadStatus" class="button-with-icon" style="width: 49%; flex-direction: row-reverse;">
+                    <ui:Label text="View Builds" class="button-label" />
+                    <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/sync&apos;);" />
+                </ui:Button>
+            </ui:GroupBox>
+            <ui:Button name="ButtonLaunchSimplified" class="button-with-icon" style="width: 100%; background-image: none; flex-direction: row-reverse; margin-top: 5px;">
+                <ui:Label text="Launch Servers" class="button-label" />
+                <ui:VisualElement class="button-icon" style="background-image: resource('PlayFlowIcons/rocket');" />
+            </ui:Button>
+            <ui:TextField picking-mode="Ignore" name="uploadedInfoValue" view-data-key="uploadedInfoValueKey" password="false" value="Last Uploaded:" readonly="true" style="display: flex; width: 100%;" />
+
+        </ui:VisualElement>
+    </ui:ScrollView>
+</ui:UXML>

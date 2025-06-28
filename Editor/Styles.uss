@@ -1,0 +1,42 @@
+/* Styles.uss */
+
+/* Generic button style with icon */
+.button-with-icon {
+    position: relative;
+    height: 30px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+}
+
+/* Label style within button */
+.button-label {
+    margin-right: 4px;
+    text-align: center;
+}
+
+/* Icon style within button */
+.button-icon {
+    width: 20px;
+    height: 20px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+
+.help-icon {
+    width: 16px;
+    height: 16px;
+    background-image: resource('PlayFlowIcons/information-icon.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+
+.help-icon:hover {
+    filter: brightness(1.2);
+}
