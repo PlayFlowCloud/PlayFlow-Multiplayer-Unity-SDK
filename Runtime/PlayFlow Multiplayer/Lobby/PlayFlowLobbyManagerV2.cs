@@ -5,6 +5,37 @@ using System.Collections.Generic;
 
 namespace PlayFlow
 {
+    /// <summary>
+    /// The primary controller for managing PlayFlow lobbies.
+    /// This class provides a singleton interface (`Instance`) for all lobby operations.
+    ///
+    /// HOW TO USE:
+    /// 1. Add this component to a persistent GameObject in your scene (e.g., a "Managers" object).
+    /// 2. Configure the API Key and other settings in the Inspector.
+    /// 3. In your own script, get the instance and initialize it:
+    ///    `PlayFlowLobbyManagerV2.Instance.Initialize("my-player-id", () => { Debug.Log("Manager is ready!"); });`
+    /// 4. Subscribe to events via `PlayFlowLobbyManagerV2.Instance.Events` to react to lobby changes.
+    /// 5. Call public methods like `CreateLobby`, `JoinLobby`, etc. to interact with the system.
+    ///
+    /// EXAMPLE - GETTING AN INVITE CODE:
+    /// After creating a private lobby, the invite code is available on the `CurrentLobby` object
+    /// or directly via the `InviteCode` property.
+    ///
+    /// <code>
+    /// PlayFlowLobbyManagerV2.Instance.CreateLobby(
+    ///     "My Private Lobby", 4, isPrivate: true,
+    ///     onSuccess: (lobby) => {
+    ///         Debug.Log($"Lobby created! Invite Code: {lobby.inviteCode}");
+    ///         // Or access it anytime via the singleton instance:
+    ///         string inviteCode = PlayFlowLobbyManagerV2.Instance.InviteCode;
+    ///         // Now you can display this code in your UI for other players to use.
+    ///     },
+    ///     onError: (error) => {
+    ///         Debug.LogError($"Failed to create lobby: {error}");
+    ///     }
+    /// );
+    /// </code>
+    /// </summary>
     [RequireComponent(typeof(PlayFlowSession), typeof(PlayFlowEvents))]
     public class PlayFlowLobbyManagerV2 : MonoBehaviour
     {
@@ -51,30 +82,82 @@ namespace PlayFlow
         private LobbyRefreshManager _refreshManager;
         private PlayFlowSettings _runtimeSettings;
         
-        // Singleton Instance
+        /// <summary>
+        /// Singleton instance of the Lobby Manager. Access all lobby functionality through this.
+        /// </summary>
         public static PlayFlowLobbyManagerV2 Instance { get; private set; }
         
         // Public API
+        
+        /// <summary>
+        /// Returns true if the manager has been successfully initialized.
+        /// </summary>
         public bool IsReady => _session != null && _session.IsInitialized;
+        
+        /// <summary>
+        /// Gets the full data for the lobby the player is currently in. Returns null if not in a lobby.
+        /// </summary>
         public Lobby CurrentLobby => _session?.CurrentLobby;
+        
+        /// <summary>
+        /// Gets the unique ID of the current player, as provided during initialization.
+        /// </summary>
         public string PlayerId => _session?.PlayerId;
+        
+        /// <summary>
+        /// Gets the current state of the lobby session (e.g., Disconnected, InLobby, Searching).
+        /// </summary>
         public LobbyState State => _session?.CurrentState ?? LobbyState.Disconnected;
+        
+        /// <summary>
+        /// Provides access to all lobby-related UnityEvents (e.g., OnLobbyJoined, OnPlayerLeft).
+        /// Subscribe to these to make your game UI react to lobby state changes.
+        /// Example: `PlayFlowLobbyManagerV2.Instance.Events.OnLobbyUpdated.AddListener(myLobbyUpdateFunction);`
+        /// </summary>
         public PlayFlowEvents Events => _events;
         
+        /// <summary>
+        /// A cached list of all currently available public lobbies. This list is updated automatically
+        /// if auto-refresh is enabled.
+        /// </summary>
         public List<Lobby> AvailableLobbies { get; private set; } = new List<Lobby>();
         
         // Helpers
+        
+        /// <summary>
+        /// A quick check to see if the player is currently in a lobby.
+        /// </summary>
         public bool IsInLobby => State == LobbyState.InLobby;
+        
+        /// <summary>
+        /// Gets the ID of the current lobby. Returns null if not in a lobby.
+        /// </summary>
         public string CurrentLobbyId => CurrentLobby?.id;
+        
+        /// <summary>
+        /// Returns true if the current player is the host of the lobby they are in.
+        /// </summary>
         public bool IsHost => IsInLobby && CurrentLobby?.host == PlayerId;
+        
+        /// <summary>
+        /// Gets the invite code for the current private lobby. Returns null if not in a private lobby.
+        /// This is the primary way to share access to a private lobby.
+        /// </summary>
         public string InviteCode => CurrentLobby?.inviteCode;
         
         // Settings access
+        
+        /// <summary>Read-only access to the configured API Key.</summary>
         public string ApiKey => _apiKey;
+        /// <summary>Read-only access to the configured Base URL.</summary>
         public string BaseUrl => _baseUrl;
+        /// <summary>Read-only access to the default lobby configuration name.</summary>
         public string DefaultLobbyConfig => _defaultLobbyConfig;
+        /// <summary>Read-only access to the lobby data refresh interval.</summary>
         public float RefreshInterval => _refreshInterval;
+        /// <summary>Read-only access to the auto-refresh setting.</summary>
         public bool AutoRefresh => _autoRefresh;
+        /// <summary>Read-only access to the debug logging setting.</summary>
         public bool Debugging => _debugLogging;
         
         private void Awake()
@@ -117,9 +200,11 @@ namespace PlayFlow
         }
         
         /// <summary>
-        /// Initialize the lobby manager with a player ID.
+        /// Initializes the lobby manager. This must be called before any other lobby operations.
         /// The API Key must be set in the inspector.
         /// </summary>
+        /// <param name="playerId">A unique identifier for the local player.</param>
+        /// <param name="onComplete">An optional callback that is invoked when initialization is successful.</param>
         public void Initialize(string playerId, Action onComplete = null)
         {
             if (IsReady)
@@ -179,8 +264,16 @@ namespace PlayFlow
         }
         
         /// <summary>
-        /// Create a new lobby
+        /// Creates a new lobby with detailed configuration.
         /// </summary>
+        /// <param name="name">The public name of the lobby.</param>
+        /// <param name="maxPlayers">The maximum number of players that can join.</param>
+        /// <param name="isPrivate">If true, the lobby will not appear in public searches and will require an invite code or direct ID to join.</param>
+        /// <param name="allowLateJoin">If true, players can join even after the match has started.</param>
+        /// <param name="region">The server region for the lobby (e.g., "us-west").</param>
+        /// <param name="customSettings">A dictionary of custom game-specific settings.</param>
+        /// <param name="onSuccess">Callback invoked with the created lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void CreateLobby(string name, int maxPlayers, bool isPrivate, bool allowLateJoin, string region, Dictionary<string, object> customSettings, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("create lobby", onError))
@@ -195,13 +288,24 @@ namespace PlayFlow
         }
         
         /// <summary>
-        /// Create a lobby with simple parameters
+        /// Creates a new lobby with simple, common parameters. The lobby will be public by default.
         /// </summary>
+        /// <param name="name">The public name of the lobby.</param>
+        /// <param name="maxPlayers">The maximum number of players that can join.</param>
+        /// <param name="isPrivate">If true, the lobby will not appear in public searches and will require an invite code to join.</param>
+        /// <param name="onSuccess">Callback invoked with the created lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void CreateLobby(string name, int maxPlayers = 4, bool isPrivate = false, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             CreateLobby(name, maxPlayers, isPrivate, true, "us-west", new Dictionary<string, object>(), onSuccess, onError);
         }
         
+        /// <summary>
+        /// Joins an existing lobby using its unique ID or invite code.
+        /// </summary>
+        /// <param name="lobbyId">The ID or invite code of the lobby to join.</param>
+        /// <param name="onSuccess">Callback invoked with the joined lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void JoinLobby(string lobbyId, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("join lobby", onError))
@@ -221,6 +325,11 @@ namespace PlayFlow
             }, onError));
         }
         
+        /// <summary>
+        /// Leaves the lobby the player is currently in.
+        /// </summary>
+        /// <param name="onSuccess">Callback invoked on successfully leaving the lobby.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void LeaveLobby(Action onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("leave lobby", onError))
@@ -241,6 +350,14 @@ namespace PlayFlow
             }, onError));
         }
         
+        /// <summary>
+        /// Updates the local player's custom state data within the lobby.
+        /// This is useful for synchronizing non-critical data like character selection, ready status, etc.
+        /// The update will be broadcast to all other players in the lobby via the `OnLobbyUpdated` event.
+        /// </summary>
+        /// <param name="state">A dictionary representing the player's custom data.</param>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void UpdatePlayerState(Dictionary<string, object> state, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("update player state", onError))
@@ -261,6 +378,11 @@ namespace PlayFlow
             }, onError));
         }
         
+        /// <summary>
+        /// Fetches a list of all available public lobbies.
+        /// </summary>
+        /// <param name="onSuccess">Callback invoked with the list of lobbies on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void GetAvailableLobbies(Action<List<Lobby>> onSuccess, Action<string> onError = null)
         {
             if (!ValidateOperation("get lobbies", onError))
@@ -272,6 +394,12 @@ namespace PlayFlow
             }, onError));
         }
         
+        /// <summary>
+        /// Starts the match. This can only be called by the lobby host.
+        /// Changes the lobby status to "in_game", which can prevent new players from joining (depending on lobby settings).
+        /// </summary>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void StartMatch(Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("start match", onError)) return;
@@ -290,6 +418,12 @@ namespace PlayFlow
             }, onError));
         }
 
+        /// <summary>
+        /// Ends the match. This can only be called by the lobby host.
+        /// Changes the lobby status back to "waiting".
+        /// </summary>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void EndMatch(Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("end match", onError)) return;
@@ -308,6 +442,12 @@ namespace PlayFlow
             }, onError));
         }
         
+        /// <summary>
+        /// Manually refreshes the data for the current lobby.
+        /// This is useful to call after specific actions or to ensure the local state is perfectly in sync.
+        /// </summary>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void RefreshCurrentLobby(Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("refresh lobby", onError))
@@ -329,12 +469,16 @@ namespace PlayFlow
         
         /// <summary>
         /// Force the refresh manager to check for updates immediately.
+        /// This will refresh both the available lobby list and the current lobby state if applicable.
         /// </summary>
         public void ForceRefresh()
         {
             _refreshManager?.ForceRefresh();
         }
 
+        /// <summary>
+        /// Disconnects the manager, stops all background refreshing, and clears the session state.
+        /// </summary>
         public void Disconnect()
         {
             if (_session != null)
@@ -411,6 +555,12 @@ namespace PlayFlow
             }
         }
 
+        /// <summary>
+        /// Kicks a player from the lobby. This can only be called by the host.
+        /// </summary>
+        /// <param name="playerToKickId">The unique ID of the player to remove from the lobby.</param>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void KickPlayer(string playerToKickId, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("kick player", onError)) return;
@@ -425,6 +575,12 @@ namespace PlayFlow
             }, onError));
         }
 
+        /// <summary>
+        /// Transfers host privileges to another player in the lobby. This can only be called by the current host.
+        /// </summary>
+        /// <param name="newHostId">The unique ID of the player who will become the new host.</param>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void TransferHost(string newHostId, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("transfer host", onError)) return;
@@ -438,6 +594,12 @@ namespace PlayFlow
             }, onError));
         }
 
+        /// <summary>
+        /// Updates the lobby's custom settings. This can only be called by the host.
+        /// </summary>
+        /// <param name="newSettings">A dictionary of new settings to apply to the lobby.</param>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void UpdateLobbySettings(Dictionary<string, object> newSettings, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("update lobby settings", onError)) return;
@@ -448,6 +610,49 @@ namespace PlayFlow
                 _session.UpdateCurrentLobby(lobby);
                 onSuccess?.Invoke(lobby);
             }, onError));
+        }
+
+        /// <summary>
+        /// Finds the lobby that a specific player is currently in.
+        /// This is useful for reconnecting or for social features like "join friend's game".
+        /// </summary>
+        /// <param name="playerId">The ID of the player to find.</param>
+        /// <param name="onSuccess">Callback invoked with the found lobby data, or null if no lobby is found.</param>
+        /// <param name="onError">Callback invoked with an error message on failure (but not for 404 "Not Found" errors).</param>
+        public void FindLobbyByPlayerId(string playerId, Action<Lobby> onSuccess, Action<string> onError = null)
+        {
+            if (!ValidateOperation("find lobby by player", onError)) return;
+            StartCoroutine(_operations.FindLobbyByPlayerIdCoroutine(playerId, onSuccess, onError));
+        }
+
+        /// <summary>
+        /// Attempts to reconnect the current player to a lobby they might have been disconnected from.
+        /// It checks if the player is in an existing lobby and, if so, automatically restores the session.
+        /// </summary>
+        /// <param name="onReconnected">Callback invoked with the lobby data if reconnection is successful.</param>
+        /// <param name="onNoLobbyFound">Callback invoked if no active lobby is found for the player.</param>
+        /// <param name="onError">Callback invoked if a system error occurs during the check.</param>
+        public void TryReconnect(Action<Lobby> onReconnected, Action onNoLobbyFound, Action<string> onError = null)
+        {
+            if (!ValidateOperation("reconnect", onError)) return;
+
+            FindLobbyByPlayerId(this.PlayerId,
+                lobby =>
+                {
+                    if (lobby != null)
+                    {
+                        _session.SetCurrentLobby(lobby);
+                        _events.InvokeLobbyJoined(lobby); // Fire standard joined event
+                        onReconnected?.Invoke(lobby);
+                        if (_debugLogging) Debug.Log($"[PlayFlowLobbyManager] Successfully reconnected to lobby {lobby.id}");
+                    }
+                    else
+                    {
+                        onNoLobbyFound?.Invoke();
+                        if (_debugLogging) Debug.Log($"[PlayFlowLobbyManager] No active lobby found for player {PlayerId}.");
+                    }
+                },
+                onError);
         }
     }
 } 

@@ -6,7 +6,7 @@ using PlayFlow;
 /// <summary>
 /// A simple example demonstrating how to use the new PlayFlow Lobby SDK V2.
 /// This script shows the core functionality with keyboard shortcuts for testing.
-/// 
+///
 /// Setup Instructions:
 /// 1. Create an empty GameObject and add the PlayFlowLobbyManagerV2 component to it.
 /// 2. Configure your API key in the PlayFlowLobbyManagerV2 component in the Inspector.
@@ -35,9 +35,9 @@ public class LobbyHelloWorld : MonoBehaviour
     
     [Tooltip("Whether created lobbies should be private")]
     public bool isPrivate = false;
-    
+
     private string _playerId;
-    
+
     void Start()
     {
         // Manager can now be accessed directly via the singleton instance

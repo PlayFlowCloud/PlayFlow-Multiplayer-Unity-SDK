@@ -114,5 +114,11 @@ namespace PlayFlow
             var payload = new JObject { ["settings"] = JObject.FromObject(settings) };
             yield return _api.UpdateLobby(lobbyId, requesterId, payload, onSuccess, onError);
         }
+
+        public IEnumerator FindLobbyByPlayerIdCoroutine(string playerId, Action<Lobby> onSuccess, Action<string> onError)
+        {
+            if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
+            yield return _api.FindLobbyByPlayerId(playerId, onSuccess, onError);
+        }
     }
 } 

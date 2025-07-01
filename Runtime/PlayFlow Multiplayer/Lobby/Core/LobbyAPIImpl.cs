@@ -217,5 +217,39 @@ namespace PlayFlow
                 }
             }, onError);
         }
+
+        public IEnumerator FindLobbyByPlayerId(string playerId, Action<Lobby> onSuccess, Action<string> onError)
+        {
+            var url = $"{_baseUrl}/lobbies/player/{playerId}?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
+
+            Action<string> customErrorHandler = (error) =>
+            {
+                // If the error is a 404, we consider it a "success" in this context,
+                // meaning we successfully found that there is no lobby for the player.
+                if (error.Contains("404") || error.ToLower().Contains("not found"))
+                {
+                    onSuccess?.Invoke(null); // Return a null lobby to indicate "not found"
+                }
+                else
+                {
+                    // For any other error, propagate it as usual.
+                    onError?.Invoke(error);
+                }
+            };
+
+            yield return _networkManager.Get(url, _apiKey, (response) =>
+            {
+                try
+                {
+                    var lobbyJObject = JObject.Parse(response);
+                    var lobby = lobbyJObject.ToObject<Lobby>();
+                    onSuccess?.Invoke(lobby);
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"Failed to parse lobby response: {e.Message}");
+                }
+            }, customErrorHandler);
+        }
     }
 } 
