@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System;
+using System.Linq;
 using PlayFlow;
 
 /// <summary>
@@ -290,7 +291,7 @@ public class LobbyHelloWorld : MonoBehaviour
             return;
         }
 
-        if (manager.CurrentLobby == null || manager.CurrentLobby.players.Count < 2)
+        if (manager.CurrentLobby == null || manager.CurrentLobby.players.Length < 2)
         {
             Debug.LogWarning("[LobbyHelloWorld] Need at least one other player in the lobby to test this feature.");
             return;
