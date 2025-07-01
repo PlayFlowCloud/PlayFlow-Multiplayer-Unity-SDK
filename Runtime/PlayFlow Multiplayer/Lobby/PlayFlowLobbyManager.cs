@@ -1,630 +1,366 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using UnityEngine.Events;
 using System;
-using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using PlayFlow;
-using System.Threading;
 
-namespace PlayFlow
+/// <summary>
+/// Main component for managing multiplayer game lobbies using the PlayFlow service.
+/// This manager provides a high-level API for creating, joining, leaving, and managing lobbies.
+/// 
+/// Setup:
+/// 1. Attach this component to a GameObject in your scene (e.g., a "LobbyController").
+/// 2. Configure the `apiKey` and `lobbyConfigName` in the Inspector.
+/// 3. In your own script, get a reference to this component.
+/// 4. Call `SetPlayerInfo()` with a unique ID for the local player before making any other calls.
+/// 5. Subscribe to the public events (e.g., `lobbyListEvents`, `individualLobbyEvents`) to respond to lobby changes.
+/// </summary>
+public class PlayFlowLobbyManager : MonoBehaviour
 {
-    public class PlayFlowLobbyManager : MonoBehaviour
+    [Header("Configuration")]
+    [Tooltip("The base URL of the PlayFlow backend.")]
+    [SerializeField] private string baseUrl = "https://backend.computeflow.cloud";
+    [Tooltip("Your project's API Key from the PlayFlow dashboard.")]
+    [SerializeField] private string apiKey;
+    [Tooltip("The name of the Lobby Configuration to use (e.g., 'Default', 'Ranked').")]
+    [SerializeField] private string lobbyConfigName = "firstLobby";
+    [Tooltip("How often to refresh the lobby list or current lobby state (in seconds). Minimum is 3.")] 
+    [SerializeField] private float refreshInterval = 5f;
+    [Tooltip("Enable or disable automatic refreshing of lobby data.")]
+    [SerializeField] private bool autoRefresh = true;
+    [Tooltip("Enable detailed logging to the console for debugging.")]
+    [SerializeField] private bool debugLogging = false;
+
+    /// <summary>
+    /// Gets a value indicating whether detailed debug logging is enabled.
+    /// </summary>
+    public bool DebugLogging => debugLogging;
+    
+    /// <summary>
+    /// Gets or sets the refresh interval for lobby data. Minimum value is 3 seconds.
+    /// </summary>
+    public float RefreshInterval { get => refreshInterval; set => refreshInterval = Mathf.Max(3f, value); }
+
+    [Header("Events")]
+    [Tooltip("Events related to the list of all available lobbies.")]
+    public PlayFlowLobbyEvents.LobbyListEvents lobbyListEvents = new PlayFlowLobbyEvents.LobbyListEvents();
+    [Tooltip("Events related to the specific lobby the player is currently in.")]
+    public PlayFlowLobbyEvents.IndividualLobbyEvents individualLobbyEvents = new PlayFlowLobbyEvents.IndividualLobbyEvents();
+    [Tooltip("Events related to players joining, leaving, or changing state.")]
+    public PlayFlowLobbyEvents.PlayerEvents playerEvents = new PlayFlowLobbyEvents.PlayerEvents();
+    [Tooltip("Events related to the match lifecycle (e.g., match started, ended).")]
+    public PlayFlowLobbyEvents.MatchEvents matchEvents = new PlayFlowLobbyEvents.MatchEvents();
+    [Tooltip("System-level events for monitoring API calls and errors.")]
+    public PlayFlowLobbyEvents.SystemEvents systemEvents = new PlayFlowLobbyEvents.SystemEvents();
+
+
+    private LobbyClient _lobbyClient;
+    private PlayFlowLobbyActions _lobbyActions;
+    private PlayFlowLobbyComparer _lobbyComparer;
+    private PlayFlowLobbyRefresher _lobbyRefresher;
+    private PlayFlowGameServerUtility _gameServerUtility;
+    private PlayFlowLobbyStateManager _stateManager;
+    
+    private string _playerId;
+    private bool _isInitialized = false;
+    private float _lastRefreshTime;
+    private Coroutine _refreshCoroutine;
+    private bool _isRefreshing = false;
+
+    private void Awake()
     {
-        [Header("Configuration")]
-        [SerializeField] private string baseUrl = "https://backend.computeflow.cloud";
-        [SerializeField] private string apiKey;
-        [SerializeField] private string lobbyConfigName = "firstLobby";
-        [SerializeField, Tooltip("Minimum refresh interval is 3 seconds")] private float refreshInterval = 3f;
-        [SerializeField] private bool autoRefresh = true;
-        [SerializeField] private bool debugLogging = false;
+        _lobbyClient = new LobbyClient(baseUrl, apiKey);
+        _stateManager = new PlayFlowLobbyStateManager();
 
-        // Public property to access debugLogging
-        public bool DebugLogging => debugLogging;
-
-        // Public property to access and set refresh interval with minimum enforcement
-        public float RefreshInterval
-        {
-            get => refreshInterval;
-            set => refreshInterval = Mathf.Max(3f, value);
-        }
-
-        // Component references
-        private LobbyClient lobbyClient;
-        private PlayFlowLobbyActions lobbyActions;
-        private PlayFlowLobbyComparer lobbyComparer;
-        private PlayFlowLobbyRefresher lobbyRefresher;
-        private PlayFlowGameServerUtility gameServerUtility;
+        var eventLogger = new PlayFlowLobbyEvents.EventLogger();
+        eventLogger.Initialize(debugLogging);
         
-        // Event components
-        private PlayFlowLobbyEvents.EventLogger eventLogger;
-
-        [Header("Events")]
-        public PlayFlowLobbyEvents.LobbyListEvents lobbyListEvents = new PlayFlowLobbyEvents.LobbyListEvents();
-        public PlayFlowLobbyEvents.IndividualLobbyEvents individualLobbyEvents = new PlayFlowLobbyEvents.IndividualLobbyEvents();
-        public PlayFlowLobbyEvents.PlayerEvents playerEvents = new PlayFlowLobbyEvents.PlayerEvents();
-        public PlayFlowLobbyEvents.MatchEvents matchEvents = new PlayFlowLobbyEvents.MatchEvents();
-        public PlayFlowLobbyEvents.SystemEvents systemEvents = new PlayFlowLobbyEvents.SystemEvents();
-
-        // Lobby creation settings
-        private string playerId = "testPlayerId";
-        private string newLobbyName = "New Lobby";
-        private int maxPlayers = 4;
-        private bool isPrivate = false;
-        private Dictionary<string, object> lobbySettings = new Dictionary<string, object>();
-        private bool newLobbyAllowLateJoin = true;
-        private string newLobbyRegion = "us-east";
+        lobbyListEvents.Initialize(eventLogger);
+        individualLobbyEvents.Initialize(eventLogger);
+        playerEvents.Initialize(eventLogger);
+        matchEvents.Initialize(eventLogger);
+        systemEvents.Initialize(eventLogger);
         
-        // Tracking variables
-        private float lastRefreshTime;
-
-        private void Awake()
+        _lobbyActions = new PlayFlowLobbyActions(_lobbyClient, lobbyConfigName, "uninitialized-player", this, this, systemEvents, individualLobbyEvents, Debug.Log, Debug.LogError);
+        _lobbyComparer = new PlayFlowLobbyComparer(lobbyListEvents, individualLobbyEvents, playerEvents, matchEvents, debugLogging);
+        _lobbyRefresher = new PlayFlowLobbyRefresher(_lobbyActions, _lobbyComparer, lobbyListEvents, debugLogging);
+        _gameServerUtility = new PlayFlowGameServerUtility(individualLobbyEvents, debugLogging);
+        
+        _stateManager.OnStateChanged += (oldLobby, newLobby) => _lobbyComparer.CompareAndFireLobbyEvents(oldLobby, newLobby);
+    }
+    
+    private void Start()
+    {
+        // Auto-refresh lobbies on start if initialized
+        if (_isInitialized)
         {
-            lobbyClient = new LobbyClient(baseUrl, apiKey);
-
-            // Initialize event loggers
-            eventLogger = new PlayFlowLobbyEvents.EventLogger();
-            eventLogger.Initialize(debugLogging);
-            
-            lobbyListEvents.Initialize(eventLogger);
-            individualLobbyEvents.Initialize(eventLogger);
-            playerEvents.Initialize(eventLogger);
-            matchEvents.Initialize(eventLogger);
-            systemEvents.Initialize(eventLogger);
-            
-            // Initialize components
-            lobbyActions = new PlayFlowLobbyActions(
-                lobbyClient,
-                lobbyConfigName,
-                playerId,
-                this,
-                systemEvents,
-                individualLobbyEvents,
-                (msg) => { if (debugLogging) Debug.Log(msg); },
-                Debug.LogError
-            );
-            
-            lobbyComparer = new PlayFlowLobbyComparer(
-                lobbyListEvents,
-                individualLobbyEvents,
-                playerEvents,
-                matchEvents,
-                debugLogging
-            );
-            
-            lobbyRefresher = new PlayFlowLobbyRefresher(
-                lobbyActions,
-                lobbyComparer,
-                lobbyListEvents,
-                debugLogging
-            );
-            
-            gameServerUtility = new PlayFlowGameServerUtility(
-                individualLobbyEvents,
-                debugLogging
-            );
+            RefreshLobbies();
         }
-
-        private void Start()
+    }
+    
+    private void Update()
+    {
+        if (!autoRefresh || !_isInitialized || _isRefreshing || Time.time - _lastRefreshTime < refreshInterval) return;
+        
+        _lastRefreshTime = Time.time;
+        
+        if (_refreshCoroutine == null)
         {
-            _ = RefreshLobbiesAsync(); // Fire and forget for initial load
-        }
-
-        private void Update()
-        {
-            if (!autoRefresh || Time.time - lastRefreshTime < refreshInterval) return;
-            
-            lastRefreshTime = Time.time;
-            
+            _isRefreshing = true;
             if (IsInLobby())
             {
-                _ = RefreshCurrentLobbyAsync();
+                _refreshCoroutine = StartCoroutine(RefreshCurrentLobbyCoroutine());
             }
             else
             {
-                _ = RefreshLobbiesAsync();
+                _refreshCoroutine = StartCoroutine(RefreshLobbiesCoroutine());
             }
         }
+    }
 
-        // ---------------------------------------------------------
-        //  REFRESH METHODS
-        // ---------------------------------------------------------
-        private async Task RefreshCurrentLobbyAsync()
+    /// <summary>
+    /// Sets the local player's information. This must be called before any other lobby operations.
+    /// </summary>
+    /// <param name="playerId">A unique identifier for the local player.</param>
+    public void SetPlayerInfo(string playerId)
+    {
+        if (string.IsNullOrEmpty(playerId))
         {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) return;
-            
-            try { await lobbyRefresher.RefreshCurrentLobbyAsync(GetCurrentLobbyId()); }
-            catch (Exception e) { if (debugLogging) Debug.LogError($"Error in RefreshCurrentLobbyAsync: {e.Message}"); }
+            Debug.LogError("Player ID cannot be null or empty.");
+            return;
+        }
+        this._playerId = playerId;
+        _lobbyActions.SetPlayerId(playerId);
+        _isInitialized = true;
+        
+        // Automatically refresh lobbies once the player ID is set
+        RefreshLobbies();
+    }
+    
+    private IEnumerator RefreshCurrentLobbyCoroutine()
+    {
+        yield return _lobbyRefresher.RefreshCurrentLobbyCoroutine(GetCurrentLobbyId());
+        _refreshCoroutine = null;
+        _isRefreshing = false;
+    }
+
+    /// <summary>
+    /// Manually triggers a refresh of the public lobby list.
+    /// </summary>
+    public void RefreshLobbies()
+    {
+        if (_refreshCoroutine == null && !_isRefreshing)
+        {
+            _isRefreshing = true;
+            _refreshCoroutine = StartCoroutine(RefreshLobbiesCoroutine());
+        }
+    }
+
+    private IEnumerator RefreshLobbiesCoroutine()
+    {
+        yield return _lobbyRefresher.RefreshLobbiesCoroutine();
+        _refreshCoroutine = null;
+        _isRefreshing = false;
+    }
+    
+    private bool IsInitializedWithPlayerId(Action<Exception> onError, string operationName)
+    {
+        if (!_isInitialized)
+        {
+            onError?.Invoke(new InvalidOperationException($"SetPlayerInfo must be called before {operationName}."));
+            return false;
+        }
+        return true;
+    }
+    
+    /// <summary>
+    /// Creates a new lobby with the specified settings.
+    /// </summary>
+    /// <param name="lobbyName">The public name of the lobby.</param>
+    /// <param name="maxPlayers">The maximum number of players that can join.</param>
+    /// <param name="isPrivate">If true, the lobby will not appear in public listings and will require an invite code.</param>
+    /// <param name="allowLateJoin">If true, players can join even after the match has started.</param>
+    /// <param name="region">The server region for the lobby.</param>
+    /// <param name="customLobbySettings">A dictionary of custom key-value pairs for game-specific settings.</param>
+    /// <param name="onSuccess">Callback invoked with the created Lobby object on success.</param>
+    /// <param name="onError">Callback invoked with an Exception on failure.</param>
+    public void CreateLobby(
+        string lobbyName, 
+        int maxPlayers, 
+        bool isPrivate, 
+        bool allowLateJoin, 
+        string region,
+        Dictionary<string, object> customLobbySettings, 
+        Action<Lobby> onSuccess, 
+        Action<Exception> onError)
+    {
+        if (!IsInitializedWithPlayerId(onError, "creating a lobby"))
+        {
+            return;
         }
 
-        public async Task RefreshLobbiesAsync()
+        PlayFlowRequestQueue.Instance.EnqueueOperation(
+            "CreateLobby",
+            () => _lobbyActions.CreateLobbyCoroutine(lobbyName, maxPlayers, isPrivate, allowLateJoin, region, customLobbySettings, 
+                (lobby) => {
+                    _stateManager.TryUpdateState(lobby, true);
+                    individualLobbyEvents.InvokeLobbyCreated(lobby);
+                    RefreshLobbies();
+                    onSuccess?.Invoke(lobby);
+                }, 
+                onError),
+            onError
+        );
+    }
+    
+    /// <summary>
+    /// Joins an existing lobby by its ID.
+    /// </summary>
+    /// <param name="lobbyId">The unique ID of the lobby to join.</param>
+    /// <param name="onSuccess">Callback invoked with the joined Lobby object on success.</param>
+    /// <param name="onError">Callback invoked with an Exception on failure.</param>
+    public void JoinLobby(string lobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
+    {
+        if (!IsInitializedWithPlayerId(onError, "joining a lobby"))
         {
-            try { await lobbyRefresher.RefreshLobbiesAsync(); }
-            catch (Exception e) { 
-                if (debugLogging) Debug.LogError($"Error in RefreshLobbiesAsync: {e.Message}");
-                systemEvents.InvokeError($"Failed to refresh lobbies: {e.Message}"); // Keep system event for broader errors
-                throw; // Re-throw for caller to handle
-            }
+            return;
         }
+        
+        PlayFlowRequestQueue.Instance.EnqueueOperation(
+            "JoinLobby",
+            () => _lobbyActions.JoinLobbyCoroutine(lobbyId, 
+                (lobby) => {
+                    _stateManager.TryUpdateState(lobby, true);
+                    RefreshLobbies();
+                    onSuccess?.Invoke(lobby);
+                },
+                onError),
+            onError
+        );
+    }
 
-        // ---------------------------------------------------------
-        //  CREATING / JOINING / LEAVING / UPDATING
-        // ---------------------------------------------------------
-        public async Task<Lobby> CreateLobbyAsync()
-        {
-            // Calls the new overload with null, which will use the internal lobbySettings
-            return await CreateLobbyAsync(null);
-        }
+    /// <summary>
+    /// Leaves the current lobby.
+    /// </summary>
+    /// <param name="onSuccess">Callback invoked on successfully leaving the lobby.</param>
+    /// <param name="onError">Callback invoked with an Exception on failure.</param>
+    public void LeaveLobby(Action onSuccess, Action<Exception> onError)
+    {
+        if (!IsInLobby()) { onError?.Invoke(new InvalidOperationException("Not in a lobby.")); return; }
+        
+        string lobbyIdToLeave = GetCurrentLobbyId();
 
-        /// <summary>
-        /// Creates a new lobby with the specified or default settings.
-        /// </summary>
-        /// <param name="customLobbySettings">Optional. Custom settings for the lobby. If null, uses the manager's internal lobbySettings.</param>
-        /// <returns>The created lobby.</returns>
-        public async Task<Lobby> CreateLobbyAsync(Dictionary<string, object> customLobbySettings = null)
-        {
-            try
-            {
-                // Use provided customLobbySettings if not null, otherwise use the internal lobbySettings field
-                Dictionary<string, object> settingsToUse = customLobbySettings ?? this.lobbySettings;
-
-                var createdLobby = await lobbyActions.CreateLobbyAsync(
-                    newLobbyName,
-                    maxPlayers,
-                    isPrivate,
-                    newLobbyAllowLateJoin,
-                    newLobbyRegion,
-                    settingsToUse // Use the determined settings
-                );
-
-                // We'll compare "null" with the new lobby, so it will fire the "joined" event, etc.
-                lobbyComparer.CompareAndFireLobbyEvents(null, createdLobby);
-                
-                individualLobbyEvents.InvokeLobbyCreated(createdLobby);
-
-                _ = RefreshLobbiesAsync();
-                return createdLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to create lobby: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> JoinLobbyAsync(string lobbyId)
-        {
-            try
-            {
-                var joinedLobby = await lobbyActions.JoinLobbyAsync(lobbyId);
-
-                if (debugLogging) Debug.Log($"Joined lobby: {joinedLobby.name}");
-
-                lobbyComparer.CompareAndFireLobbyEvents(null, joinedLobby);   // "null" → new lobby
-
-                _ = RefreshLobbiesAsync();
-                return joinedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to join lobby: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task LeaveLobbyAsync()
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-
-            try
-            {
-                string lobbyIdToLeave = GetCurrentLobbyId();
-                Lobby oldLobby = lobbyComparer.GetCurrentLobby()?.Clone(); // Clone for accurate event firing after state reset
-
-                await lobbyActions.LeaveLobbyAsync(lobbyIdToLeave);
-                if (debugLogging) Debug.Log("Left lobby successfully via actions.");
-
-                lobbyComparer.CompareAndFireLobbyEvents(oldLobby, null); // Pass the cloned oldLobby
-                lobbyComparer.ResetCurrentLobbyStatus(); // Reset local state after firing events based on old state
-                individualLobbyEvents.InvokeLobbyLeft(); // Explicitly ensure this fires if CompareAndFire didn't handle it due to prior state reset
-                
-                _ = RefreshLobbiesAsync();
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to leave lobby: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> JoinLobbyByCodeAsync(string code)
-        {
-            try
-            {
-                var joinedLobby = await lobbyActions.JoinLobbyByCodeAsync(code);
-
-                if (debugLogging) Debug.Log($"Joined lobby by code: {joinedLobby.name}");
-
-                lobbyComparer.CompareAndFireLobbyEvents(null, joinedLobby); // "null" → new lobby
-
-                _ = RefreshLobbiesAsync();
-                return joinedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to join lobby by code: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> KickPlayerAsync(string playerToKick)
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-
-            try
-            {
-                var updatedLobby = await lobbyActions.KickPlayerAsync(GetCurrentLobbyId(), playerToKick);
-
-                if (debugLogging) Debug.Log($"Kicked player: {playerToKick}");
-
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-
-                _ = RefreshLobbiesAsync();
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to kick player: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> UpdateAllLobbySettingsAsync(
-            Dictionary<string, object> newSettings = null,
-            string newName = null,
-            int? newMaxPlayers = null,
-            bool? newIsPrivate = null,
-            bool? newAllowLateJoin = null)
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-            if (!IsHost())
-            {
-                systemEvents.InvokeError("Only the host can update lobby settings");
-                throw new InvalidOperationException("Only the host can update lobby settings.");
-            }
-
-            try
-            {
-                var updatedLobby = await lobbyActions.UpdateAllLobbySettingsAsync(
-                    GetCurrentLobbyId(),
-                    newSettings,
-                    newName,
-                    newMaxPlayers,
-                    newIsPrivate,
-                    newAllowLateJoin);
-
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to update lobby settings: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> UpdateLobbySettingsAsync()
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-            if (!IsHost())
-            {
-                systemEvents.InvokeError("Only the host can update lobby settings");
-                throw new InvalidOperationException("Only the host can update lobby settings.");
-            }
-
-            try
-            {
-                var updatedLobby = await lobbyActions.UpdateLobbySettingsAsync(GetCurrentLobbyId(), lobbyComparer.GetLobbySettings());
-                
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to update lobby settings: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        // ---------------------------------------------------------
-        //  MATCH ACTIONS
-        // ---------------------------------------------------------
-        public async Task<Lobby> StartMatchAsync()
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-            if (!IsHost())
-            {
-                systemEvents.InvokeError("Only the host can start the match");
-                throw new InvalidOperationException("Only the host can start the match.");
-            }
-
-            try
-            {
-                var updatedLobby = await lobbyActions.StartMatchAsync(GetCurrentLobbyId());
-                
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-
-                _ = RefreshLobbiesAsync();
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to start game: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> EndGameAsync()
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-            if (!IsHost())
-            {
-                systemEvents.InvokeError("Only the host can end the match");
-                throw new InvalidOperationException("Only the host can end the match.");
-            }
-
-            try
-            {
-                var updatedLobby = await lobbyActions.EndGameAsync(GetCurrentLobbyId());
-                
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-
-                _ = RefreshLobbiesAsync();
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to end game: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        public async Task<Lobby> TransferHostAsync(string newHostId)
-        {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId())) throw new InvalidOperationException("Not in a lobby or lobby ID is invalid.");
-            
-            try
-            {
-                var updatedLobby = await lobbyActions.TransferHostAsync(GetCurrentLobbyId(), newHostId);
-                
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-
-                _ = RefreshLobbiesAsync();
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to transfer host: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                throw;
-            }
-        }
-
-        // ---------------------------------------------------------
-        //  CHECKING EXISTING LOBBY AT STARTUP
-        // ---------------------------------------------------------
-        /// <summary>
-        /// Manually check if the player is already in a lobby and join it if they are.
-        /// Use this if you want to explicitly check, for example, at game startup.
-        /// </summary>
-        public async Task<bool> CheckAndJoinExistingLobbyAsync()
-        {
-            try
-            {
-                JObject playerLobbyJObject = await lobbyActions.GetLobbyAsync(playerId);
-                
-                if (playerLobbyJObject != null)
-                {
-                    var playerLobby = playerLobbyJObject.ToObject<Lobby>(Newtonsoft.Json.JsonSerializer.CreateDefault());
-                    if (playerLobby != null) 
-                    {                       
-                        // If we already are in a lobby, compare "null" to force the "joined" events
-                        lobbyComparer.CompareAndFireLobbyEvents(null, playerLobby);
-
-                        // If it's in match state, you can do your custom logic
-                        if (playerLobby.status == "in_game") // Changed from "match" to "in_game" to align with typical status values
-                        {
-                            if (debugLogging) Debug.Log("Joined an ongoing match");
-                        }
-                        else
-                        {
-                            if (debugLogging) Debug.Log($"Joined lobby in {playerLobby.status} state");
-                        }
-                        return true;
+        PlayFlowRequestQueue.Instance.EnqueueOperation(
+            "LeaveLobby",
+            () => _lobbyActions.LeaveLobbyCoroutine(lobbyIdToLeave,
+                (success) => {
+                    if (success) {
+                        _stateManager.TryUpdateState(null, true);
+                        individualLobbyEvents.InvokeLobbyLeft();
+                        RefreshLobbies();
+                        onSuccess?.Invoke();
                     }
-                }
-                return false;
-            }
-            catch (Exception e)
-            {
-                // LobbyClient throws an exception on HTTP error status (e.g. 404 Not Found)
-                // Check if the error message indicates a "not found" type of error for the player/lobby.
-                if (e.Message.Contains("404") || e.Message.ToLower().Contains("not found")) 
-                {
-                    // This is an expected case if the player is not in a lobby, so don't log as error.
-                    if (debugLogging) Debug.Log($"Player {playerId} is not currently in a lobby.");
-                }
-                else
-                {
-                    Debug.LogError($"Error checking existing lobby: {e.Message}");
-                }
-                lobbyComparer.ResetCurrentLobbyStatus();
-                return false;
-            }
-        }
+                },
+                onError),
+            onError
+        );
+    }
 
-        // ---------------------------------------------------------
-        //  PUBLIC GETTERS & SETTERS
-        // ---------------------------------------------------------
-        public Lobby GetCurrentLobby() => lobbyComparer.GetCurrentLobby();
-        public List<Lobby> GetAvailableLobbies() => lobbyRefresher.GetAvailableLobbies();
-        public bool IsInLobby() => lobbyComparer.GetCurrentLobby() != null;
-        public string GetPlayerId() => playerId;
-        public string GetCurrentLobbyId() => lobbyComparer.GetCurrentLobby()?.id;
-        public string GetCurrentLobbyName() => lobbyComparer.GetCurrentLobby()?.name;
-        public int GetCurrentPlayerCount() => lobbyComparer.GetCurrentLobby()?.currentPlayers ?? 0;
-        public string GetCurrentLobbyStatus() => lobbyComparer.GetCurrentLobby()?.status;
-        public bool IsHost() => lobbyComparer.GetCurrentLobby() != null && lobbyComparer.GetCurrentLobby().host == playerId;
-        public string[] GetCurrentPlayers() => lobbyComparer.GetCurrentLobby()?.players;
-        public Dictionary<string, object> GetGameServerInfo() => lobbyComparer.GetCurrentLobby()?.gameServer as Dictionary<string, object>;
-        public string GetInviteCode() => lobbyComparer.GetCurrentLobby()?.inviteCode;
+    /// <summary>
+    /// Gets the current lobby the player is in. Returns null if not in a lobby.
+    /// </summary>
+    public Lobby GetCurrentLobby() => _stateManager.CurrentLobby;
+    
+    /// <summary>
+    /// Gets the latest list of available public lobbies.
+    /// </summary>
+    public List<Lobby> GetAvailableLobbies() => _lobbyRefresher.GetAvailableLobbies();
+    
+    /// <summary>
+    /// Returns true if the player is currently in a lobby.
+    /// </summary>
+    public bool IsInLobby() => GetCurrentLobby() != null;
 
-        /// <summary>
-        /// Sends a real-time state update for the current player to the lobby.
-        /// The state can include any JSON-serializable data like position, health, score, etc.
-        /// </summary>
-        /// <param name="state">Dictionary containing the player's state data</param>
-        /// <returns>True if the update was successful, false otherwise</returns>
-        public async Task<bool> SendPlayerStateUpdateAsync(Dictionary<string, object> state)
+    /// <summary>
+    /// Gets the unique ID of the local player.
+    /// </summary>
+    public string GetPlayerId() => _playerId;
+
+    /// <summary>
+    /// Gets the ID of the current lobby. Returns null if not in a lobby.
+    /// </summary>
+    public string GetCurrentLobbyId() => GetCurrentLobby()?.id;
+    
+    /// <summary>
+    /// Gets the name of the current lobby. Returns null if not in a lobby.
+    /// </summary>
+    public string GetCurrentLobbyName() => GetCurrentLobby()?.name;
+
+    /// <summary>
+    /// Gets the number of players in the current lobby. Returns 0 if not in a lobby.
+    /// </summary>
+    public int GetCurrentPlayerCount() => GetCurrentLobby()?.currentPlayers ?? 0;
+    
+    /// <summary>
+    /// Gets the status of the current lobby (e.g., "waiting", "in_game"). Returns null if not in a lobby.
+    /// </summary>
+    public string GetCurrentLobbyStatus() => GetCurrentLobby()?.status;
+    
+    /// <summary>
+    /// Returns true if the local player is the host of the current lobby.
+    /// </summary>
+    public bool IsHost() => IsInLobby() && GetCurrentLobby().host == _playerId;
+    
+    /// <summary>
+    /// Gets a list of player IDs in the current lobby. Returns null if not in a lobby.
+    /// </summary>
+    public string[] GetCurrentPlayers() => GetCurrentLobby()?.players;
+    
+    /// <summary>
+    /// Gets the game server connection information for the current lobby. Returns null if no server is active.
+    /// </summary>
+    public Dictionary<string, object> GetGameServerInfo() => GetCurrentLobby()?.gameServer;
+    
+    /// <summary>
+    /// Gets the invite code for the current lobby. Returns null if the lobby has no invite code.
+    /// </summary>
+    public string GetInviteCode() => GetCurrentLobby()?.inviteCode;
+    
+    public void SendPlayerStateUpdate(string currentLobbyId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<Exception> onError)
+    {
+        if (!IsInitializedWithPlayerId(onError, "sending a player state update"))
         {
-            if (!IsInLobby() || string.IsNullOrEmpty(GetCurrentLobbyId()))
-            {
-                systemEvents.InvokeError("Cannot update player state: Not in a lobby");
-                return false;
-            }
-
-            if (state == null)
-            {
-                systemEvents.InvokeError("Cannot update player state: State is null");
-                return false;
-            }
-
-            try
-            {
-                var updatedLobby = await lobbyActions.SendPlayerStateUpdateAsync(GetCurrentLobbyId(), state);
-                
-                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-                return true;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to update player state: {e.Message}");
-                // Error event is already fired in the lobbyActions method
-                return false;
-            }
+            return;
         }
-
-        public bool GetAutoRefresh() => autoRefresh;
-        public void SetAutoRefresh(bool value) => autoRefresh = value;
-
-        public void SetPlayerInfo(string id)
+        if (string.IsNullOrEmpty(currentLobbyId))
         {
-            playerId = id;
-            // Update the player ID in the lobbyActions as well
-            if (lobbyActions != null)
-            {
-                lobbyActions.SetPlayerId(id);
-            }
+            onError?.Invoke(new ArgumentException("Lobby ID cannot be null or empty."));
+            return;
         }
-
-        public void SetLobbyCreationSettings(string name, int maxPlayerCount, bool makePrivate, bool allowLateJoin = true, string region = "us-east")
+        _lobbyActions.SendPlayerStateUpdate(currentLobbyId, state, onSuccess, onError);
+    }
+    
+    private void OnDestroy()
+    {
+        // Stop any running coroutines
+        if (_refreshCoroutine != null)
         {
-            newLobbyName = name;
-            maxPlayers = maxPlayerCount;
-            isPrivate = makePrivate;
-            newLobbyAllowLateJoin = allowLateJoin;
-            newLobbyRegion = region;
+            StopCoroutine(_refreshCoroutine);
+            _refreshCoroutine = null;
         }
-
-        public Dictionary<string, object> GetLobbySettings() => lobbyComparer.GetLobbySettings();
-        public void AddLobbySetting(string key, object value)
+        
+        // Clear state
+        _stateManager?.Clear();
+        
+        // Unsubscribe from events to prevent memory leaks
+        if (_stateManager != null)
         {
-            var settings = lobbyComparer.GetLobbySettings();
-            settings[key] = value;
-            if (IsInLobby() && IsHost())
-            {
-                _ = UpdateLobbySettingsAsync();
-            }
+            _stateManager.OnStateChanged -= _lobbyComparer.CompareAndFireLobbyEvents;
         }
-        public void RemoveLobbySetting(string key)
-        {
-            var settings = lobbyComparer.GetLobbySettings();
-            if (settings.Remove(key) && IsInLobby() && IsHost())
-            {
-                _ = UpdateLobbySettingsAsync();
-            }
-        }
-        public void ClearLobbySettings()
-        {
-            var settings = lobbyComparer.GetLobbySettings();
-            settings.Clear();
-            if (IsInLobby() && IsHost())
-            {
-                _ = UpdateLobbySettingsAsync();
-            }
-        }
-
-        /// <summary>
-        /// Asynchronously waits until the game server for the current lobby reports its status as "running".
-        /// </summary>
-        /// <param name="timeoutSeconds">Maximum time to wait in seconds.</param>
-        /// <returns>True if the game server becomes "running" within the timeout, false otherwise.</returns>
-        public async Task<bool> WaitForGameServerRunningAsync(float timeoutSeconds = 30f)
-        {
-            if (!IsInLobby())
-            {
-                if (debugLogging) Debug.LogWarning("[WaitForGameServerRunningAsync] Not in a lobby. Cannot wait for game server.");
-                return false;
-            }
-
-            return await gameServerUtility.WaitForGameServerRunningAsync(GetCurrentLobby(), timeoutSeconds);
-        }
-
-        // Method to print game server details, similar to MatchmakerHelloWorld.cs
-        public void PrintGameServerDetails()
-        {
-            if (!IsInLobby())
-            {
-                if (debugLogging) Debug.Log("[PrintGameServerDetails] Not currently in a lobby.");
-                return;
-            }
-
-            gameServerUtility.PrintGameServerDetails(GetCurrentLobby());
-        }
-
-        /// <summary>
-        /// Retrieves specific network port details (host, external port) for the current lobby's game server.
-        /// </summary>
-        /// <param name="internalPort">The internal port number to search for.</param>
-        /// <param name="protocol">Optional: The protocol (e.g., "udp", "tcp") to match. Case-insensitive.</param>
-        /// <param name="portName">Optional: The specific name of the port (e.g., "game_udp") to match. Case-insensitive.</param>
-        /// <returns>A NetworkPortDetails struct if a match is found; otherwise, null.</returns>
-        public NetworkPortDetails? GetGameServerPortInfo(int internalPort, string protocol = null, string portName = null)
-        {
-            Lobby currentLobby = GetCurrentLobby();
-            if (currentLobby == null)
-            {
-                if (debugLogging) Debug.LogWarning("[GetGameServerPortInfo] Cannot get port info: Not in a lobby.");
-                return null;
-            }
-            if (gameServerUtility == null)
-            {
-                 if (debugLogging) Debug.LogError("[GetGameServerPortInfo] gameServerUtility is null. This should not happen.");
-                return null;
-            }
-            return gameServerUtility.GetNetworkPort(currentLobby, internalPort, protocol, portName);
-        }
+        
+        // Reset flags
+        _isRefreshing = false;
+        _isInitialized = false;
     }
 }
 

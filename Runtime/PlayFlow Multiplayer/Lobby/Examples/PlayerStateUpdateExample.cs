@@ -17,7 +17,7 @@ public class PlayerStateUpdateExample : MonoBehaviour
         }
     }
 
-    private async void Update()
+    private void Update()
     {
         if (Input.GetKeyDown(KeyCode.T))
         {
@@ -37,30 +37,38 @@ public class PlayerStateUpdateExample : MonoBehaviour
             
             updateCounter += 10;
 
-            bool success = await lobbyManager.SendPlayerStateUpdateAsync(playerState);
-            if (success)
+            if (!lobbyManager.IsInLobby())
             {
-                Debug.Log($"Successfully sent player state update for player {lobbyManager.GetPlayerId()}!");
-                
-                var lobby = lobbyManager.GetCurrentLobby();
-                // Use JsonConvert for lobby serialization
-                Debug.Log($"Current lobby: {JsonConvert.SerializeObject(lobby)}");
+                Debug.LogWarning("Not in a lobby, cannot send state update.");
+                return;
+            }
+            
+            lobbyManager.SendPlayerStateUpdate(
+                lobbyManager.GetCurrentLobbyId(),
+                playerState,
+                onSuccess: (updatedLobby) =>
+                {
+                    Debug.Log($"Successfully sent player state update for player {lobbyManager.GetPlayerId()}!");
+                    var lobby = lobbyManager.GetCurrentLobby();
+                    // Use JsonConvert for lobby serialization
+                    Debug.Log($"Current lobby: {JsonConvert.SerializeObject(lobby)}");
 
-                if (lobby?.lobbyStateRealTime != null && 
-                    lobby.lobbyStateRealTime.ContainsKey(lobbyManager.GetPlayerId()))
+                    if (lobby?.lobbyStateRealTime != null && 
+                        lobby.lobbyStateRealTime.ContainsKey(lobbyManager.GetPlayerId()))
+                    {
+                        // Use JsonConvert for state serialization
+                        Debug.Log($"Current lobby state: {JsonConvert.SerializeObject(lobby.lobbyStateRealTime[lobbyManager.GetPlayerId()])}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("State update succeeded but state not found in lobby!");
+                    }
+                },
+                onError: (error) =>
                 {
-                    // Use JsonConvert for state serialization
-                    Debug.Log($"Current lobby state: {JsonConvert.SerializeObject(lobby.lobbyStateRealTime[lobbyManager.GetPlayerId()])}");
+                    Debug.LogError($"Failed to send player state update: {error.Message}");
                 }
-                else
-                {
-                    Debug.LogWarning("State update succeeded but state not found in lobby!");
-                }
-            }
-            else
-            {
-                Debug.LogWarning("Failed to send player state update!");
-            }
+            );
         }
     }
 }

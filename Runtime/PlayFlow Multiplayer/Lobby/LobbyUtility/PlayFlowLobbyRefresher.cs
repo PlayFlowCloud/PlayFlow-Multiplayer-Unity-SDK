@@ -1,10 +1,8 @@
-using UnityEngine;
-using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEngine;
 
 namespace PlayFlow
 {
@@ -16,6 +14,7 @@ namespace PlayFlow
         private readonly bool debugLogging;
         
         private List<Lobby> availableLobbies = new List<Lobby>();
+        private readonly object lobbyListLock = new object(); // Add lock for thread safety
         
         public PlayFlowLobbyRefresher(
             PlayFlowLobbyActions lobbyActions,
@@ -29,100 +28,57 @@ namespace PlayFlow
             this.debugLogging = debugLogging;
         }
         
-        public List<Lobby> GetAvailableLobbies() => availableLobbies;
-
-        public async Task RefreshCurrentLobbyAsync(string currentLobbyId)
+        public List<Lobby> GetAvailableLobbies() 
         {
-            if (string.IsNullOrEmpty(currentLobbyId)) return;
-
-            try
+            lock (lobbyListLock)
             {
-                JObject lobbyJObject = await lobbyActions.GetLobbyAsync(currentLobbyId);
-                if (lobbyJObject != null)
-                {
-                    if (debugLogging) 
-                    {
-                        Debug.Log($"[RefreshCurrentLobby] Fetched lobby JObject: {lobbyJObject.ToString(Newtonsoft.Json.Formatting.None)}");
-                    }
-                    var updatedLobby = lobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                    if (updatedLobby != null)
-                    {
-                        if (debugLogging && updatedLobby.gameServer != null && updatedLobby.gameServer.TryGetValue("status", out var statusVal))
-                        {
-                            Debug.Log($"[RefreshCurrentLobby] Deserialized updatedLobby.gameServer.status: {statusVal?.ToString()}");
-                        }
-                        lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), updatedLobby);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Failed to refresh current lobby: {e.Message}");
-                // Error event is already fired in the lobbyActions method
+                return new List<Lobby>(availableLobbies); // Return a copy to prevent modification
             }
         }
 
-        public async Task RefreshLobbiesAsync()
+        public IEnumerator RefreshCurrentLobbyCoroutine(string currentLobbyId)
         {
-            try
+            JObject lobbyJObject = null;
+            yield return lobbyActions.GetLobbyCoroutine(currentLobbyId, response => lobbyJObject = response, error =>
             {
-                JArray lobbiesJArray = await lobbyActions.ListLobbiesAsync();
-                List<Lobby> newLobbies = new List<Lobby>();
-                if (lobbiesJArray != null)
-                {
-                    newLobbies = lobbiesJArray.ToObject<List<Lobby>>(JsonSerializer.CreateDefault());
-                }
+                if (debugLogging) Debug.LogError($"Error refreshing current lobby: {error.Message}");
+                lobbyComparer.ResetCurrentLobbyStatus();
+            });
 
-                // 1) Identify removed lobbies
-                var currentLobbyIds = availableLobbies.Select(l => l.id).ToHashSet();
-                var newLobbyIds = newLobbies.Select(l => l.id).ToHashSet();
-                
-                foreach (var oldLobby in availableLobbies)
-                {
-                    if (!newLobbyIds.Contains(oldLobby.id))
-                    {
-                        // Lobby removed
-                        lobbyListEvents.InvokeLobbyRemoved(oldLobby);
-                    }
-                }
-
-                // 2) Identify added or modified lobbies
-                foreach (var newLobby in newLobbies)
-                {
-                    var existingLobby = availableLobbies.FirstOrDefault(l => l.id == newLobby.id);
-                    if (existingLobby == null)
-                    {
-                        // Lobby added
-                        lobbyListEvents.InvokeLobbyAdded(newLobby);
-                    }
-                    else
-                    {
-                        // Lobby might be modified
-                        lobbyComparer.CompareAndFireLobbyEvents(existingLobby, newLobby);
-                    }
-                }
-
-                // 3) Overwrite internal list after firing events
-                availableLobbies = newLobbies;
-
-                // 4) If we're currently in a lobby, check for updates on it
-                var currentLobby = lobbyComparer.GetCurrentLobby();
-                if (currentLobby != null && !string.IsNullOrEmpty(currentLobby.id))
-                {
-                    var updatedLobby = availableLobbies.Find(l => l.id == currentLobby.id);
-                    if (updatedLobby != null)
-                    {
-                        lobbyComparer.CompareAndFireLobbyEvents(currentLobby, updatedLobby);
-                    }
-                }
-
-                // 5) Fire the onLobbiesRefreshed event with the new list
-                lobbyListEvents.InvokeLobbiesRefreshed(newLobbies);
+            if (lobbyJObject != null)
+            {
+                var newLobby = lobbyJObject.ToObject<Lobby>();
+                lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), newLobby);
             }
-            catch (Exception e)
+        }
+
+        public IEnumerator RefreshLobbiesCoroutine()
+        {
+            JArray newLobbiesJArray = null;
+            yield return lobbyActions.ListLobbiesCoroutine(response => newLobbiesJArray = response, error =>
             {
-                Debug.LogError($"Failed to refresh lobbies: {e.Message}");
-                // Error event is already fired in the lobbyActions method
+                if (debugLogging) Debug.LogError($"Error refreshing lobby list: {error.Message}");
+            });
+
+            if (newLobbiesJArray != null)
+            {
+                var newLobbies = newLobbiesJArray.ToObject<List<Lobby>>();
+                List<Lobby> oldLobbies = null;
+                
+                lock (lobbyListLock)
+                {
+                    oldLobbies = new List<Lobby>(availableLobbies);
+                    availableLobbies = newLobbies;
+                }
+                
+                lobbyListEvents?.InvokeLobbiesRefreshed(newLobbies);
+                
+                // Compare old and new lists to find added/removed/modified lobbies
+                var addedLobbies = newLobbies.Where(n => oldLobbies.All(o => o.id != n.id)).ToList();
+                var removedLobbies = oldLobbies.Where(o => newLobbies.All(n => n.id != o.id)).ToList();
+
+                foreach (var lobby in addedLobbies) lobbyListEvents?.InvokeLobbyAdded(lobby);
+                foreach (var lobby in removedLobbies) lobbyListEvents?.InvokeLobbyRemoved(lobby);
             }
         }
     }

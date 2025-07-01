@@ -5,6 +5,7 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PlayFlow;
+using System.Collections;
 
 namespace PlayFlow
 {
@@ -13,6 +14,7 @@ namespace PlayFlow
         private LobbyClient lobbyClient;
         private string lobbyConfigName;
         private string playerId;
+        private MonoBehaviour coroutineRunner; // To start coroutines
         private PlayFlowLobbyManager manager;
         
         // Delegate for logging
@@ -27,6 +29,7 @@ namespace PlayFlow
             LobbyClient lobbyClient, 
             string lobbyConfigName, 
             string playerId,
+            MonoBehaviour coroutineRunner, // Pass a MonoBehaviour to run coroutines
             PlayFlowLobbyManager manager,
             PlayFlowLobbyEvents.SystemEvents systemEvents,
             PlayFlowLobbyEvents.IndividualLobbyEvents individualLobbyEvents,
@@ -36,170 +39,159 @@ namespace PlayFlow
             this.lobbyClient = lobbyClient;
             this.lobbyConfigName = lobbyConfigName;
             this.playerId = playerId;
+            this.coroutineRunner = coroutineRunner;
             this.manager = manager;
             this.systemEvents = systemEvents;
             this.individualLobbyEvents = individualLobbyEvents;
-            this.logger = logger ?? ((message) => Debug.Log(message));
-            this.errorLogger = errorLogger ?? ((message) => Debug.LogError(message));
+            this.logger = logger ?? (msg => { });
+            this.errorLogger = errorLogger ?? (msg => { });
         }
 
-        public async Task<Lobby> CreateLobbyAsync(
+        private void Run(IEnumerator coroutine)
+        {
+            coroutineRunner.StartCoroutine(coroutine);
+        }
+
+        public void CreateLobby(
             string newLobbyName,
             int maxPlayers,
             bool isPrivate,
             bool allowLateJoin,
             string region,
-            Dictionary<string, object> lobbySettings)
+            Dictionary<string, object> lobbySettings,
+            Action<Lobby> onSuccess,
+            Action<Exception> onError)
         {
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject settingsPayload = lobbySettings != null && lobbySettings.Count > 0 
-                    ? JObject.FromObject(lobbySettings) 
-                    : new JObject();
-
-                JObject createdLobbyJObject = await lobbyClient.CreateLobbyAsync(
-                    lobbyConfigName,
-                    newLobbyName,
-                    maxPlayers,
-                    isPrivate,
-                    isPrivate, // useInviteCode defaults to isPrivate
-                    allowLateJoin,
-                    region,
-                    settingsPayload,
-                    playerId
-                );
-
-                if (createdLobbyJObject == null)
-                {
-                    throw new Exception("CreateLobbyAsync returned null JObject");
-                }
-                
-                var createdLobby = createdLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                
-                if (createdLobby == null)
-                {
-                    throw new Exception("Failed to deserialize created lobby from JObject");
-                }
-
-                logger($"Created lobby: {createdLobby.name}");
-                return createdLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to create lobby: {e.Message}");
-                systemEvents.InvokeError($"Failed to create lobby: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(CreateLobbyCoroutine(newLobbyName, maxPlayers, isPrivate, allowLateJoin, region, lobbySettings, onSuccess, onError));
         }
 
-        public async Task<Lobby> JoinLobbyAsync(string lobbyId)
+        public IEnumerator CreateLobbyCoroutine(
+            string newLobbyName,
+            int maxPlayers,
+            bool isPrivate,
+            bool allowLateJoin,
+            string region,
+            Dictionary<string, object> lobbySettings,
+            Action<Lobby> onSuccess,
+            Action<Exception> onError)
         {
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject joinedLobbyJObject = await lobbyClient.AddPlayerToLobbyAsync(lobbyConfigName, lobbyId, playerId, null);
-                if (joinedLobbyJObject == null) throw new Exception("AddPlayerToLobbyAsync returned null");
-                var joinedLobby = joinedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (joinedLobby == null) throw new Exception("Failed to deserialize joined lobby");
+            systemEvents?.InvokePreAPICall();
+            JObject settingsJObject = lobbySettings != null ? JObject.FromObject(lobbySettings) : new JObject();
 
-                logger($"Joined lobby: {joinedLobby.name}");
-                return joinedLobby;
+            yield return lobbyClient.CreateLobbyCoroutine(
+                lobbyConfigName, newLobbyName, maxPlayers, isPrivate, false, allowLateJoin, region, settingsJObject, playerId,
+                (response) => {
+                    var lobby = response.ToObject<Lobby>();
+                    onSuccess?.Invoke(lobby);
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError(error.Message);
+                    systemEvents?.InvokePostAPICall();
             }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to join lobby: {e.Message}");
-                systemEvents.InvokeError($"Failed to join lobby: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            );
         }
 
-        public async Task LeaveLobbyAsync(string currentLobbyId)
+        public void JoinLobby(string lobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            Run(JoinLobbyCoroutine(lobbyId, onSuccess, onError));
+        }
+
+        public IEnumerator JoinLobbyCoroutine(string lobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            var metadata = new JObject { ["displayName"] = "Player" }; // Example metadata
+            
+            yield return lobbyClient.AddPlayerToLobbyCoroutine(lobbyConfigName, lobbyId, playerId, metadata,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError(error.Message);
+                    systemEvents?.InvokePostAPICall();
+            }
+            );
+        }
+
+        public void LeaveLobby(string currentLobbyId, Action<bool> onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
                 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                await lobbyClient.RemovePlayerFromLobbyAsync(lobbyConfigName, currentLobbyId, playerId, playerId, false);
-                logger("Left lobby successfully");
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to leave lobby: {e.Message}");
-                systemEvents.InvokeError($"Failed to leave lobby: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(LeaveLobbyCoroutine(currentLobbyId, onSuccess, onError));
         }
 
-        public async Task<Lobby> JoinLobbyByCodeAsync(string code)
+        public IEnumerator LeaveLobbyCoroutine(string currentLobbyId, Action<bool> onSuccess, Action<Exception> onError)
         {
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject joinedLobbyJObject = await lobbyClient.JoinLobbyByCodeAsync(lobbyConfigName, code, playerId, null);
-                if (joinedLobbyJObject == null) throw new Exception("JoinLobbyByCodeAsync returned null");
-                var joinedLobby = joinedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (joinedLobby == null) throw new Exception("Failed to deserialize joined lobby by code");
-
-                logger($"Joined lobby by code: {joinedLobby.name}");
-                return joinedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to join lobby by code: {e.Message}");
-                systemEvents.InvokeError($"Failed to join lobby by code: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            systemEvents?.InvokePreAPICall();
+            
+            yield return lobbyClient.RemovePlayerFromLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, playerId, false,
+                (response) => {
+                    onSuccess?.Invoke(true);
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to leave lobby: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
         }
 
-        public async Task<Lobby> KickPlayerAsync(string currentLobbyId, string playerToKick)
+        public void JoinLobbyByCode(string code, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            Run(JoinLobbyByCodeCoroutine(code, onSuccess, onError));
+        }
+
+        private IEnumerator JoinLobbyByCodeCoroutine(string code, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            yield return lobbyClient.JoinLobbyByCodeCoroutine(lobbyConfigName, code, playerId, null,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to join lobby by code: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
+        }
+
+        public void KickPlayer(string currentLobbyId, string playerToKick, Action<Lobby> onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject updatedLobbyJObject = await lobbyClient.RemovePlayerFromLobbyAsync(lobbyConfigName, currentLobbyId, playerToKick, playerId, true);
-                if (updatedLobbyJObject == null) throw new Exception("RemovePlayerFromLobbyAsync (kick) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize kicked lobby");
-
-                logger($"Kicked player: {playerToKick}");
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to kick player: {e.Message}");
-                systemEvents.InvokeError($"Failed to kick player: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(KickPlayerCoroutine(currentLobbyId, playerToKick, onSuccess, onError));
         }
 
-        public async Task<Lobby> UpdateAllLobbySettingsAsync(
+        private IEnumerator KickPlayerCoroutine(string currentLobbyId, string playerToKick, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            yield return lobbyClient.RemovePlayerFromLobbyCoroutine(lobbyConfigName, currentLobbyId, playerToKick, playerId, true,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to kick player: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
+        }
+
+        public void UpdateAllLobbySettings(
             string currentLobbyId,
+            Action<Lobby> onSuccess,
+            Action<Exception> onError,
             Dictionary<string, object> newSettings = null,
             string newName = null,
             int? newMaxPlayers = null,
@@ -209,164 +201,162 @@ namespace PlayFlow
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject innerSettingsPayload = new JObject();
-                if (newName != null) innerSettingsPayload["name"] = newName;
-                if (newMaxPlayers.HasValue) innerSettingsPayload["maxPlayers"] = newMaxPlayers.Value;
-                if (newIsPrivate.HasValue) innerSettingsPayload["isPrivate"] = newIsPrivate.Value;
-                if (newAllowLateJoin.HasValue) innerSettingsPayload["allowLateJoin"] = newAllowLateJoin.Value;
-                if (newSettings != null && newSettings.Count > 0) innerSettingsPayload["settings"] = JObject.FromObject(newSettings);
-                else if (newSettings != null && newSettings.Count == 0) innerSettingsPayload["settings"] = new JObject();
+            Run(UpdateAllLobbySettingsCoroutine(currentLobbyId, onSuccess, onError, newSettings, newName, newMaxPlayers, newIsPrivate, newAllowLateJoin));
+        }
 
-                JObject payload = new JObject
+        private IEnumerator UpdateAllLobbySettingsCoroutine(
+            string currentLobbyId,
+            Action<Lobby> onSuccess,
+            Action<Exception> onError,
+            Dictionary<string, object> newSettings = null,
+            string newName = null,
+            int? newMaxPlayers = null,
+            bool? newIsPrivate = null,
+            bool? newAllowLateJoin = null)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            JObject innerSettingsPayload = new JObject();
+            if (newName != null) innerSettingsPayload["name"] = newName;
+            if (newMaxPlayers.HasValue) innerSettingsPayload["maxPlayers"] = newMaxPlayers.Value;
+            if (newIsPrivate.HasValue) innerSettingsPayload["isPrivate"] = newIsPrivate.Value;
+            if (newAllowLateJoin.HasValue) innerSettingsPayload["allowLateJoin"] = newAllowLateJoin.Value;
+            if (newSettings != null && newSettings.Count > 0) innerSettingsPayload["settings"] = JObject.FromObject(newSettings);
+            else if (newSettings != null && newSettings.Count == 0) innerSettingsPayload["settings"] = new JObject();
+
+            JObject payload = new JObject
+            {
+                ["settings"] = innerSettingsPayload
+            };
+
+            yield return lobbyClient.UpdateLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, payload,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to update lobby settings: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
+        }
+
+        public void UpdateLobbySettings(string currentLobbyId, Dictionary<string, object> lobbySettings, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            if (string.IsNullOrEmpty(currentLobbyId)) 
+                throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
+
+            Run(UpdateLobbySettingsCoroutine(currentLobbyId, lobbySettings, onSuccess, onError));
+        }
+
+        private IEnumerator UpdateLobbySettingsCoroutine(string currentLobbyId, Dictionary<string, object> lobbySettings, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            JObject innerCustomSettings = new JObject();
+            if (lobbySettings != null && lobbySettings.Count > 0) innerCustomSettings = JObject.FromObject(lobbySettings);
+            
+            JObject payload = new JObject
+            {
+                ["settings"] = new JObject
                 {
-                    ["settings"] = innerSettingsPayload
-                };
-
-                JObject updatedLobbyJObject = await lobbyClient.UpdateLobbyAsync(lobbyConfigName, currentLobbyId, playerId, payload);
-                if (updatedLobbyJObject == null) throw new Exception("UpdateLobbyAsync (AllSettings) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize updated lobby (AllSettings)");
-
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to update lobby settings: {e.Message}");
-                systemEvents.InvokeError($"Failed to update lobby settings: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+                    ["settings"] = innerCustomSettings
+                }
+            };
+            
+            yield return lobbyClient.UpdateLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, payload,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to update lobby settings: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
         }
 
-        public async Task<Lobby> UpdateLobbySettingsAsync(string currentLobbyId, Dictionary<string, object> lobbySettings)
+        public void StartMatch(string currentLobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject innerCustomSettings = new JObject();
-                if (lobbySettings != null && lobbySettings.Count > 0) innerCustomSettings = JObject.FromObject(lobbySettings);
-                
-                JObject payload = new JObject
-                {
-                    ["settings"] = new JObject
-                    {
-                        ["settings"] = innerCustomSettings
-                    }
-                };
-                
-                JObject updatedLobbyJObject = await lobbyClient.UpdateLobbyAsync(lobbyConfigName, currentLobbyId, playerId, payload);
-                if (updatedLobbyJObject == null) throw new Exception("UpdateLobbyAsync (Settings dictionary) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize updated lobby (Settings dictionary)");
-
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to update lobby settings: {e.Message}");
-                systemEvents.InvokeError($"Failed to update lobby settings: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(StartMatchCoroutine(currentLobbyId, onSuccess, onError));
         }
 
-        public async Task<Lobby> StartMatchAsync(string currentLobbyId)
+        private IEnumerator StartMatchCoroutine(string currentLobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            var payload = new JObject { ["status"] = "in_game" };
+            yield return lobbyClient.UpdateLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, payload,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to start game: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
+        }
+
+        public void EndGame(string currentLobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                var payload = new JObject { ["status"] = "in_game" };
-                JObject updatedLobbyJObject = await lobbyClient.UpdateLobbyAsync(lobbyConfigName, currentLobbyId, playerId, payload);
-                if (updatedLobbyJObject == null) throw new Exception("UpdateLobbyAsync (StartMatch) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize updated lobby (StartMatch)");
-
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to start game: {e.Message}");
-                systemEvents.InvokeError($"Failed to start game: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(EndGameCoroutine(currentLobbyId, onSuccess, onError));
         }
 
-        public async Task<Lobby> EndGameAsync(string currentLobbyId)
+        private IEnumerator EndGameCoroutine(string currentLobbyId, Action<Lobby> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            var payload = new JObject { ["status"] = "waiting" };
+            yield return lobbyClient.UpdateLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, payload,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to end game: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
+        }
+
+        public void TransferHost(string currentLobbyId, string newHostId, Action<Lobby> onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                var payload = new JObject { ["status"] = "waiting" };
-                JObject updatedLobbyJObject = await lobbyClient.UpdateLobbyAsync(lobbyConfigName, currentLobbyId, playerId, payload);
-                if (updatedLobbyJObject == null) throw new Exception("UpdateLobbyAsync (EndGame) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize updated lobby (EndGame)");
-
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to end game: {e.Message}");
-                systemEvents.InvokeError($"Failed to end game: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(TransferHostCoroutine(currentLobbyId, newHostId, onSuccess, onError));
         }
 
-        public async Task<Lobby> TransferHostAsync(string currentLobbyId, string newHostId)
+        private IEnumerator TransferHostCoroutine(string currentLobbyId, string newHostId, Action<Lobby> onSuccess, Action<Exception> onError)
         {
-            if (string.IsNullOrEmpty(currentLobbyId)) 
-                throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
-
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                var payload = new JObject { ["host"] = newHostId };
-                JObject updatedLobbyJObject = await lobbyClient.UpdateLobbyAsync(lobbyConfigName, currentLobbyId, playerId, payload);
-                if (updatedLobbyJObject == null) throw new Exception("UpdateLobbyAsync (TransferHost) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize updated lobby (TransferHost)");
-
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to transfer host: {e.Message}");
-                systemEvents.InvokeError($"Failed to transfer host: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            systemEvents?.InvokePreAPICall();
+            
+            var payload = new JObject { ["host"] = newHostId };
+            yield return lobbyClient.UpdateLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, payload,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to transfer host: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
         }
 
-        public async Task<Lobby> SendPlayerStateUpdateAsync(string currentLobbyId, Dictionary<string, object> state)
+        public void SendPlayerStateUpdate(string currentLobbyId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
@@ -374,67 +364,69 @@ namespace PlayFlow
             if (state == null)
                 throw new ArgumentNullException(nameof(state), "State cannot be null");
 
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                var payload = new JObject { ["playerState"] = JObject.FromObject(state) };
-                JObject updatedLobbyJObject = await lobbyClient.UpdateLobbyAsync(lobbyConfigName, currentLobbyId, playerId, payload);
-                if (updatedLobbyJObject == null) throw new Exception("UpdateLobbyAsync (SendPlayerStateUpdate) returned null");
-                var updatedLobby = updatedLobbyJObject.ToObject<Lobby>(JsonSerializer.CreateDefault());
-                if (updatedLobby == null) throw new Exception("Failed to deserialize updated lobby (SendPlayerStateUpdate)");
-
-                return updatedLobby;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to update player state: {e.Message}");
-                systemEvents.InvokeError($"Failed to update player state: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(SendPlayerStateUpdateCoroutine(currentLobbyId, state, onSuccess, onError));
         }
 
-        public async Task<JArray> ListLobbiesAsync()
+        private IEnumerator SendPlayerStateUpdateCoroutine(string currentLobbyId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<Exception> onError)
         {
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JArray lobbiesJArray = await lobbyClient.ListLobbiesAsync(lobbyConfigName);
-                return lobbiesJArray;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to list lobbies: {e.Message}");
-                systemEvents.InvokeError($"Failed to list lobbies: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            systemEvents?.InvokePreAPICall();
+            
+            var payload = new JObject { ["playerState"] = JObject.FromObject(state) };
+            yield return lobbyClient.UpdateLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, payload,
+                (response) => {
+                    onSuccess?.Invoke(response.ToObject<Lobby>());
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to update player state: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
         }
 
-        public async Task<JObject> GetLobbyAsync(string lobbyId)
+        public void ListLobbies(Action<JArray> onSuccess, Action<Exception> onError)
         {
-            systemEvents.InvokePreAPICall();
-            try
-            {
-                JObject lobbyJObject = await lobbyClient.GetLobbyAsync(lobbyConfigName, lobbyId);
-                return lobbyJObject;
-            }
-            catch (Exception e)
-            {
-                errorLogger($"Failed to get lobby: {e.Message}");
-                systemEvents.InvokeError($"Failed to get lobby: {e.Message}");
-                throw;
-            }
-            finally
-            {
-                systemEvents.InvokePostAPICall();
-            }
+            Run(ListLobbiesCoroutine(onSuccess, onError));
+        }
+
+        public IEnumerator ListLobbiesCoroutine(Action<JArray> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            yield return lobbyClient.ListLobbiesCoroutine(lobbyConfigName,
+                (response) => {
+                    onSuccess?.Invoke(response as JArray);
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to list lobbies: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
+        }
+
+        public void GetLobby(string lobbyId, Action<JObject> onSuccess, Action<Exception> onError)
+        {
+            Run(GetLobbyCoroutine(lobbyId, onSuccess, onError));
+        }
+
+        public IEnumerator GetLobbyCoroutine(string lobbyId, Action<JObject> onSuccess, Action<Exception> onError)
+        {
+            systemEvents?.InvokePreAPICall();
+            
+            yield return lobbyClient.GetLobbyCoroutine(lobbyConfigName, lobbyId,
+                (response) => {
+                    onSuccess?.Invoke(response as JObject);
+                    systemEvents?.InvokePostAPICall();
+                },
+                (error) => {
+                    onError?.Invoke(error);
+                    systemEvents?.InvokeError($"Failed to get lobby: {error.Message}");
+                    systemEvents?.InvokePostAPICall();
+                }
+            );
         }
 
         // Update the playerId used for API calls

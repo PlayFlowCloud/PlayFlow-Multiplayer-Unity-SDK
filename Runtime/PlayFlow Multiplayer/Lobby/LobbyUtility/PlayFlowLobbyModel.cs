@@ -15,8 +15,10 @@ namespace PlayFlow
         public string host;
         public string status;
         public bool isPrivate;
+        public bool useInviteCode;
         public string inviteCode;
         public bool allowLateJoin;
+        public int timeout;
         public string region;
         public string createdAt;
         public string updatedAt;

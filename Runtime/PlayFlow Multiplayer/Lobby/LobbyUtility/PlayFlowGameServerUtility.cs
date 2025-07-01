@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq; // Added for Linq FirstOrDefault
+using System.Collections;
 
 namespace PlayFlow
 {
@@ -126,6 +127,33 @@ namespace PlayFlow
                 }
                 timeoutCts.Dispose(); // Dispose of the CancellationTokenSource
             }
+        }
+
+        public IEnumerator WaitForGameServerRunningCoroutine(Lobby currentLobby, Action<bool> onComplete, float timeoutSeconds = 30f)
+        {
+            if (currentLobby == null || currentLobby.gameServer == null)
+            {
+                if (debugLogging) Debug.LogWarning("[WaitForGameServerRunning] Lobby or game server data is null.");
+                onComplete?.Invoke(false);
+                yield break;
+            }
+
+            float startTime = Time.time;
+            while (Time.time - startTime < timeoutSeconds)
+            {
+                if (currentLobby.gameServer != null && currentLobby.gameServer.TryGetValue("status", out object statusObj) && statusObj?.ToString() == "running")
+                {
+                    if (debugLogging) Debug.Log("[WaitForGameServerRunning] Game server is now 'running'.");
+                    onComplete?.Invoke(true);
+                    yield break;
+                }
+                
+                // Instead of refreshing here, we rely on the external refresh loop of PlayFlowLobbyManager
+                yield return new WaitForSeconds(2f); // Polling interval
+            }
+            
+            if (debugLogging) Debug.LogWarning("[WaitForGameServerRunning] Timed out waiting for game server to be 'running'.");
+            onComplete?.Invoke(false);
         }
 
         // Method to print game server details, similar to MatchmakerHelloWorld.cs

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json; // Added for Newtonsoft.Json
+using Newtonsoft.Json.Linq; // Added for JObject and JToken
 
 namespace PlayFlow.SDK.Servers
 {
@@ -137,11 +138,13 @@ namespace PlayFlow.SDK.Servers
         /// </summary>
         public string compute_size; 
         
+        [Tooltip("The version tag of the build to use for the server.")]
         public string version_tag; 
         
-        /// <summary>
-        /// Time to live for the server in seconds (valid range: 60-86400). Nullable.
-        /// </summary>
+        [Tooltip("The specific version of the build to use for the server.")]
+        public string version;
+
+        [Tooltip("Time in seconds before the server automatically terminates.")]
         public int? ttl; 
         
         /// <summary>
@@ -376,7 +379,24 @@ namespace PlayFlow.SDK.Servers
             if (string.IsNullOrEmpty(serverData.region)) 
                 throw new ArgumentException("Server region (serverData.region) is required.", nameof(serverData.region));
             
-            return await SendRequestAsync<ServerStartResponse>("/v2/servers/start", UnityWebRequest.kHttpVerbPOST, serverData);
+            // The JSON payload should be dynamically constructed based on what's provided
+            var payload = new JObject
+            {
+                { "name", serverData.name },
+                { "compute_size", serverData.compute_size },
+            };
+
+            if (serverData.ttl.HasValue) payload.Add("ttl", serverData.ttl.Value);
+            if (!string.IsNullOrEmpty(serverData.region)) payload.Add("region", serverData.region);
+            if (!string.IsNullOrEmpty(serverData.version_tag)) payload.Add("version_tag", serverData.version_tag);
+            if (!string.IsNullOrEmpty(serverData.version)) payload.Add("version", serverData.version);
+            if (!string.IsNullOrEmpty(serverData.startup_args)) payload.Add("startup_args", serverData.startup_args);
+            if (serverData.custom_data != null)
+            {
+                payload.Add("custom_data", JToken.FromObject(serverData.custom_data));
+            }
+            
+            return await SendRequestAsync<ServerStartResponse>("/v2/servers/start", "POST", payload);
         }
 
         /// <summary>
