@@ -91,12 +91,37 @@ namespace PlayFlow
             {
                 return; // Not the same lobby
             }
-
-            // Simple check based on updatedAt timestamp. A more robust implementation
-            // would be a deep comparison of all relevant fields.
-            if (_currentLobby.updatedAt == newLobby.updatedAt && _currentLobby.players.Length == newLobby.players.Length)
+            
+            // Perform a more thorough comparison than just the timestamp.
+            bool hasChanged = false;
+            
+            // 1. Check for direct database updates via timestamp
+            if (_currentLobby.updatedAt != newLobby.updatedAt)
             {
-                return; // No change detected
+                hasChanged = true;
+            }
+            
+            // 2. Check for changes in game server status (which doesn't change the timestamp)
+            string oldServerStatus = _currentLobby.gameServer != null && _currentLobby.gameServer.ContainsKey("status") 
+                ? _currentLobby.gameServer["status"]?.ToString() : null;
+            
+            string newServerStatus = newLobby.gameServer != null && newLobby.gameServer.ContainsKey("status")
+                ? newLobby.gameServer["status"]?.ToString() : null;
+            
+            if (oldServerStatus != newServerStatus)
+            {
+                hasChanged = true;
+            }
+
+            // 3. Check for player count changes
+            if ((_currentLobby.players?.Length ?? 0) != (newLobby.players?.Length ?? 0))
+            {
+                hasChanged = true;
+            }
+
+            if (!hasChanged)
+            {
+                return; // No meaningful change detected
             }
             
             _currentLobby = newLobby;
