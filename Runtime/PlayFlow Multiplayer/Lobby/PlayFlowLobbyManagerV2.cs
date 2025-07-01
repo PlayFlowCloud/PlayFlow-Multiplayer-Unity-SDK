@@ -51,6 +51,9 @@ namespace PlayFlow
         private LobbyRefreshManager _refreshManager;
         private PlayFlowSettings _runtimeSettings;
         
+        // Singleton Instance
+        public static PlayFlowLobbyManagerV2 Instance { get; private set; }
+        
         // Public API
         public bool IsReady => _session != null && _session.IsInitialized;
         public Lobby CurrentLobby => _session?.CurrentLobby;
@@ -72,10 +75,18 @@ namespace PlayFlow
         public string DefaultLobbyConfig => _defaultLobbyConfig;
         public float RefreshInterval => _refreshInterval;
         public bool AutoRefresh => _autoRefresh;
-        public bool DebugLogging => _debugLogging;
+        public bool Debugging => _debugLogging;
         
         private void Awake()
         {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
             // Get or add required components immediately
             _session = GetComponent<PlayFlowSession>() ?? gameObject.AddComponent<PlayFlowSession>();
             _events = GetComponent<PlayFlowEvents>() ?? gameObject.AddComponent<PlayFlowEvents>();
@@ -387,6 +398,11 @@ namespace PlayFlow
             if (_refreshManager != null)
             {
                 _refreshManager.OnLobbyListRefreshed -= HandleLobbyListRefreshed;
+            }
+            
+            if (Instance == this)
+            {
+                Instance = null;
             }
             
             if (_runtimeSettings != null)

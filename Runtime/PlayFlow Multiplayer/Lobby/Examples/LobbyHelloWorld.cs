@@ -25,10 +25,6 @@ using PlayFlow;
 /// </summary>
 public class LobbyHelloWorld : MonoBehaviour
 {
-    [Header("Manager")]
-    [Tooltip("Assign your PlayFlowLobbyManagerV2 component here.")]
-    public PlayFlowLobbyManagerV2 lobbyManager;
-
     [Header("Settings")]
     [Tooltip("The name for lobbies created by this script")]
     public string lobbyName = "Test Lobby";
@@ -44,15 +40,11 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void Start()
     {
-        // Find the manager if it's not assigned
-        if (lobbyManager == null)
+        // Manager can now be accessed directly via the singleton instance
+        if (PlayFlowLobbyManagerV2.Instance == null)
         {
-            lobbyManager = FindObjectOfType<PlayFlowLobbyManagerV2>();
-            if (lobbyManager == null)
-            {
-                Debug.LogError("[LobbyHelloWorld] PlayFlowLobbyManagerV2 not found in the scene! Please add it and configure your API key.", this);
-                return;
-            }
+            Debug.LogError("[LobbyHelloWorld] PlayFlowLobbyManagerV2 not found in the scene! Please add it to a GameObject.", this);
+            return;
         }
 
         // Generate a unique player ID
@@ -60,7 +52,7 @@ public class LobbyHelloWorld : MonoBehaviour
         Debug.Log($"[LobbyHelloWorld] Starting with player ID: {_playerId}");
         
         // Initialize the manager
-        lobbyManager.Initialize(_playerId, OnManagerReady);
+        PlayFlowLobbyManagerV2.Instance.Initialize(_playerId, OnManagerReady);
         
         // Subscribe to events
         SubscribeToEvents();
@@ -80,7 +72,7 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void Update()
     {
-        if (!lobbyManager.IsReady) return;
+        if (!PlayFlowLobbyManagerV2.Instance.IsReady) return;
         
         // Refresh lobby list
         if (Input.GetKeyDown(KeyCode.R))
@@ -129,7 +121,7 @@ public class LobbyHelloWorld : MonoBehaviour
     {
         Debug.Log("[LobbyHelloWorld] Refreshing lobby list...");
         
-        lobbyManager.GetAvailableLobbies(
+        PlayFlowLobbyManagerV2.Instance.GetAvailableLobbies(
             onSuccess: (lobbies) => {
                 Debug.Log($"[LobbyHelloWorld] Found {lobbies.Count} lobbies:");
                 foreach (var lobby in lobbies)
@@ -147,7 +139,7 @@ public class LobbyHelloWorld : MonoBehaviour
     {
         Debug.Log($"[LobbyHelloWorld] Creating lobby '{lobbyName}'...");
         
-        lobbyManager.CreateLobby(lobbyName, maxPlayers, isPrivate,
+        PlayFlowLobbyManagerV2.Instance.CreateLobby(lobbyName, maxPlayers, isPrivate,
             onSuccess: (lobby) => {
                 Debug.Log($"[LobbyHelloWorld] Successfully created lobby: {lobby.name} (ID: {lobby.id})");
                 if (lobby.isPrivate && !string.IsNullOrEmpty(lobby.inviteCode))
@@ -165,7 +157,7 @@ public class LobbyHelloWorld : MonoBehaviour
     {
         Debug.Log("[LobbyHelloWorld] Looking for available lobbies...");
         
-        lobbyManager.GetAvailableLobbies(
+        PlayFlowLobbyManagerV2.Instance.GetAvailableLobbies(
             onSuccess: (lobbies) => {
                 var availableLobby = lobbies.Find(l => !l.isPrivate && l.currentPlayers < l.maxPlayers);
                 
@@ -173,7 +165,7 @@ public class LobbyHelloWorld : MonoBehaviour
                 {
                     Debug.Log($"[LobbyHelloWorld] Joining lobby: {availableLobby.name}");
                     
-                    lobbyManager.JoinLobby(availableLobby.id,
+                    PlayFlowLobbyManagerV2.Instance.JoinLobby(availableLobby.id,
                         onSuccess: (lobby) => {
                             Debug.Log($"[LobbyHelloWorld] Successfully joined lobby: {lobby.name}");
                         },
@@ -195,7 +187,7 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void LeaveLobby()
     {
-        if (lobbyManager.CurrentLobby == null)
+        if (PlayFlowLobbyManagerV2.Instance.CurrentLobby == null)
         {
             Debug.LogWarning("[LobbyHelloWorld] Not in a lobby!");
             return;
@@ -203,7 +195,7 @@ public class LobbyHelloWorld : MonoBehaviour
         
         Debug.Log("[LobbyHelloWorld] Leaving current lobby...");
         
-        lobbyManager.LeaveLobby(
+        PlayFlowLobbyManagerV2.Instance.LeaveLobby(
             onSuccess: () => {
                 Debug.Log("[LobbyHelloWorld] Successfully left lobby");
             },
@@ -215,7 +207,7 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void StartMatch()
     {
-        if (lobbyManager.CurrentLobby == null || !lobbyManager.IsHost)
+        if (PlayFlowLobbyManagerV2.Instance.CurrentLobby == null || !PlayFlowLobbyManagerV2.Instance.IsHost)
         {
             Debug.LogWarning("[LobbyHelloWorld] Cannot start match: you must be in a lobby and be the host.");
             return;
@@ -223,7 +215,7 @@ public class LobbyHelloWorld : MonoBehaviour
         
         Debug.Log("[LobbyHelloWorld] Starting match...");
         
-        lobbyManager.StartMatch(
+        PlayFlowLobbyManagerV2.Instance.StartMatch(
             onSuccess: (lobby) => {
                 Debug.Log($"[LobbyHelloWorld] Match started successfully. Status: {lobby.status}");
             },
@@ -235,7 +227,7 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void EndMatch()
     {
-        if (lobbyManager.CurrentLobby == null || !lobbyManager.IsHost)
+        if (PlayFlowLobbyManagerV2.Instance.CurrentLobby == null || !PlayFlowLobbyManagerV2.Instance.IsHost)
         {
             Debug.LogWarning("[LobbyHelloWorld] Cannot end match: you must be in a lobby and be the host.");
             return;
@@ -243,7 +235,7 @@ public class LobbyHelloWorld : MonoBehaviour
         
         Debug.Log("[LobbyHelloWorld] Ending match...");
         
-        lobbyManager.EndMatch(
+        PlayFlowLobbyManagerV2.Instance.EndMatch(
             onSuccess: (lobby) => {
                 Debug.Log($"[LobbyHelloWorld] Match ended successfully. Status: {lobby.status}");
             },
@@ -255,7 +247,7 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void SendTestPlayerState()
     {
-        if (lobbyManager.CurrentLobby == null)
+        if (PlayFlowLobbyManagerV2.Instance.CurrentLobby == null)
         {
             Debug.LogWarning("[LobbyHelloWorld] Not in a lobby!");
             return;
@@ -271,7 +263,7 @@ public class LobbyHelloWorld : MonoBehaviour
         
         Debug.Log("[LobbyHelloWorld] Sending player state update...");
         
-        lobbyManager.UpdatePlayerState(testState,
+        PlayFlowLobbyManagerV2.Instance.UpdatePlayerState(testState,
             onSuccess: (lobby) => {
                 Debug.Log("[LobbyHelloWorld] Successfully updated player state");
             },
@@ -283,7 +275,7 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void SubscribeToEvents()
     {
-        var events = lobbyManager.Events;
+        var events = PlayFlowLobbyManagerV2.Instance.Events;
         
         // Lobby events
         events.OnLobbyCreated.AddListener(OnLobbyCreated);
@@ -303,7 +295,7 @@ public class LobbyHelloWorld : MonoBehaviour
         events.OnError.AddListener(OnError);
         
         // Session state changes
-        var session = lobbyManager.GetComponent<PlayFlowSession>();
+        var session = PlayFlowLobbyManagerV2.Instance.GetComponent<PlayFlowSession>();
         session.OnStateChanged.AddListener(OnStateChanged);
     }
     
@@ -363,12 +355,12 @@ public class LobbyHelloWorld : MonoBehaviour
     void OnDestroy()
     {
         // Clean up
-        if (lobbyManager != null)
+        if (PlayFlowLobbyManagerV2.Instance != null)
         {
-            lobbyManager.Disconnect();
+            PlayFlowLobbyManagerV2.Instance.Disconnect();
             
             // Unsubscribe from events
-            var events = lobbyManager.Events;
+            var events = PlayFlowLobbyManagerV2.Instance.Events;
             events.OnLobbyCreated.RemoveAllListeners();
             events.OnLobbyJoined.RemoveAllListeners();
             events.OnLobbyUpdated.RemoveAllListeners();
