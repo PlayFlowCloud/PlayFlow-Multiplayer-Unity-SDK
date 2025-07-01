@@ -73,7 +73,7 @@ namespace PlayFlow
             yield return _api.ListLobbies(onSuccess, onError);
         }
         
-        public IEnumerator UpdatePlayerStateCoroutine(string lobbyId, string playerId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<string> onError)
+        public IEnumerator UpdatePlayerStateCoroutine(string lobbyId, string requesterId, string targetPlayerId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<string> onError)
         {
             if (_api == null)
             {
@@ -81,7 +81,7 @@ namespace PlayFlow
                 yield break;
             }
             
-            yield return _api.UpdatePlayerState(lobbyId, playerId, state, onSuccess, onError);
+            yield return _api.UpdatePlayerState(lobbyId, requesterId, targetPlayerId, state, onSuccess, onError);
         }
 
         public IEnumerator UpdateLobbyStatusCoroutine(string lobbyId, string playerId, string status, Action<Lobby> onSuccess, Action<string> onError)

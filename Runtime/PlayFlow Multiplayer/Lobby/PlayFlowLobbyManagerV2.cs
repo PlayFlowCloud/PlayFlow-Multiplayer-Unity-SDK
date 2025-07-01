@@ -370,10 +370,35 @@ namespace PlayFlow
             }
             
             var lobbyId = CurrentLobby.id;
-            StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, state, lobby =>
+            // A player updates their own state, so requester and target are the same.
+            StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, PlayerId, state, lobby =>
             {
                 _session.UpdateCurrentLobby(lobby);
                 _events.InvokePlayerStateChanged(PlayerId);
+                onSuccess?.Invoke(lobby);
+            }, onError));
+        }
+        
+        /// <summary>
+        /// [Host-Only] Updates another player's custom state data within the lobby.
+        /// This is useful for authoritative game logic where the host controls player properties.
+        /// </summary>
+        /// <param name="targetPlayerId">The ID of the player whose state is being updated.</param>
+        /// <param name="state">A dictionary representing the player's custom data.</param>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
+        public void UpdateStateForPlayer(string targetPlayerId, Dictionary<string, object> state, Action<Lobby> onSuccess = null, Action<string> onError = null)
+        {
+            if (!ValidateOperation("update state for player", onError)) return;
+            if (!IsHost) { onError?.Invoke("Only the host can update another player's state."); return; }
+            if (!_session.IsInLobby) { onError?.Invoke("Not in a lobby"); return; }
+            if (string.IsNullOrEmpty(targetPlayerId)) { onError?.Invoke("Target Player ID cannot be empty."); return; }
+
+            var lobbyId = CurrentLobby.id;
+            StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, targetPlayerId, state, lobby =>
+            {
+                _session.UpdateCurrentLobby(lobby);
+                _events.InvokePlayerStateChanged(targetPlayerId);
                 onSuccess?.Invoke(lobby);
             }, onError));
         }

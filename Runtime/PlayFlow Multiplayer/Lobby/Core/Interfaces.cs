@@ -36,7 +36,7 @@ namespace PlayFlow
         IEnumerator LeaveLobby(string lobbyId, string playerId, Action onSuccess, Action<string> onError);
         IEnumerator GetLobby(string lobbyId, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator ListLobbies(Action<List<Lobby>> onSuccess, Action<string> onError);
-        IEnumerator UpdatePlayerState(string lobbyId, string playerId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<string> onError);
+        IEnumerator UpdatePlayerState(string lobbyId, string requesterId, string targetPlayerId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator UpdateLobbyStatus(string lobbyId, string playerId, string status, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator KickPlayer(string lobbyId, string requesterId, string playerToKickId, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator UpdateLobby(string lobbyId, string requesterId, Newtonsoft.Json.Linq.JObject payload, Action<Lobby> onSuccess, Action<string> onError);

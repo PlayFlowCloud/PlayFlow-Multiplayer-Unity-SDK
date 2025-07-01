@@ -22,6 +22,7 @@ using PlayFlow;
 /// - S: Start the match (host only)
 /// - E: End the match (host only)
 /// - T: Send test player state update
+/// - U: Update other player's state (host only)
 /// </summary>
 public class LobbyHelloWorld : MonoBehaviour
 {
@@ -68,6 +69,7 @@ public class LobbyHelloWorld : MonoBehaviour
         Debug.Log("  S - Start the match");
         Debug.Log("  E - End the match");
         Debug.Log("  T - Send test player state");
+        Debug.Log("  U - Update other player's state");
     }
     
     void Update()
@@ -114,6 +116,12 @@ public class LobbyHelloWorld : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.E))
         {
             EndMatch();
+        }
+        
+        // [Host-Only] Update another player's state
+        if (Input.GetKeyDown(KeyCode.U))
+        {
+            UpdateOtherPlayerState();
         }
     }
     
@@ -266,6 +274,56 @@ public class LobbyHelloWorld : MonoBehaviour
         PlayFlowLobbyManagerV2.Instance.UpdatePlayerState(testState,
             onSuccess: (lobby) => {
                 Debug.Log("[LobbyHelloWorld] Successfully updated player state");
+            },
+            onError: (error) => {
+                Debug.LogError($"[LobbyHelloWorld] Failed to update player state: {error}");
+            }
+        );
+    }
+    
+    void UpdateOtherPlayerState()
+    {
+        var manager = PlayFlowLobbyManagerV2.Instance;
+        if (!manager.IsHost)
+        {
+            Debug.LogWarning("[LobbyHelloWorld] Only the host can update another player's state.");
+            return;
+        }
+
+        if (manager.CurrentLobby == null || manager.CurrentLobby.players.Count < 2)
+        {
+            Debug.LogWarning("[LobbyHelloWorld] Need at least one other player in the lobby to test this feature.");
+            return;
+        }
+
+        // Find the first player who is not the host
+        string otherPlayerId = null;
+        foreach (var player in manager.CurrentLobby.players)
+        {
+            if (player != manager.PlayerId)
+            {
+                otherPlayerId = player;
+                break;
+            }
+        }
+
+        if (string.IsNullOrEmpty(otherPlayerId))
+        {
+             Debug.LogWarning("[LobbyHelloWorld] Couldn't find another player in the lobby.");
+             return;
+        }
+
+        var testState = new Dictionary<string, object>
+        {
+            ["messageFromHost"] = "The host updated your state!",
+            ["timestamp"] = DateTime.UtcNow.ToString()
+        };
+
+        Debug.Log($"[LobbyHelloWorld] Host is updating state for player {otherPlayerId}...");
+        
+        manager.UpdateStateForPlayer(otherPlayerId, testState,
+            onSuccess: (lobby) => {
+                Debug.Log($"[LobbyHelloWorld] Successfully updated state for player {otherPlayerId}.");
             },
             onError: (error) => {
                 Debug.LogError($"[LobbyHelloWorld] Failed to update player state: {error}");

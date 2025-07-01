@@ -138,15 +138,19 @@ namespace PlayFlow
             }, onError);
         }
         
-        public IEnumerator UpdatePlayerState(string lobbyId, string playerId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<string> onError)
+        public IEnumerator UpdatePlayerState(string lobbyId, string requesterId, string targetPlayerId, Dictionary<string, object> state, Action<Lobby> onSuccess, Action<string> onError)
         {
-            // Following PlayFlowLobbyActions.cs pattern - using PUT to update lobby with playerState
             var url = $"{_baseUrl}/lobbies/{lobbyId}?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
             
+            // This payload structure allows the backend to verify the requester's permissions (e.g., is host)
+            // and apply the state update to the correct target player.
             var payload = new JObject
             {
-                ["requesterId"] = playerId,
-                ["playerState"] = JObject.FromObject(state)
+                ["requesterId"] = requesterId,
+                ["playerStates"] = new JObject
+                {
+                    [targetPlayerId] = JObject.FromObject(state)
+                }
             };
             
             var json = payload.ToString();
