@@ -116,7 +116,7 @@ namespace PlayFlow
             );
         }
 
-        public void LeaveLobby(string currentLobbyId, Action<bool> onSuccess, Action<Exception> onError)
+        public void LeaveLobby(string currentLobbyId, Action onSuccess, Action<Exception> onError)
         {
             if (string.IsNullOrEmpty(currentLobbyId)) 
                 throw new ArgumentException("Lobby ID cannot be null or empty", nameof(currentLobbyId));
@@ -124,13 +124,13 @@ namespace PlayFlow
             Run(LeaveLobbyCoroutine(currentLobbyId, onSuccess, onError));
         }
 
-        public IEnumerator LeaveLobbyCoroutine(string currentLobbyId, Action<bool> onSuccess, Action<Exception> onError)
+        public IEnumerator LeaveLobbyCoroutine(string currentLobbyId, Action onSuccess, Action<Exception> onError)
         {
             systemEvents?.InvokePreAPICall();
             
             yield return lobbyClient.RemovePlayerFromLobbyCoroutine(lobbyConfigName, currentLobbyId, playerId, playerId, false,
                 (response) => {
-                    onSuccess?.Invoke(true);
+                    onSuccess?.Invoke();
                     systemEvents?.InvokePostAPICall();
                 },
                 (error) => {
@@ -423,7 +423,11 @@ namespace PlayFlow
                 },
                 (error) => {
                     onError?.Invoke(error);
-                    systemEvents?.InvokeError($"Failed to get lobby: {error.Message}");
+                    // Only fire system error event if it's not a 404 (expected when lobby is deleted)
+                    if (!error.Message.Contains("404") && !error.Message.Contains("Not Found"))
+                    {
+                        systemEvents?.InvokeError($"Failed to get lobby: {error.Message}");
+                    }
                     systemEvents?.InvokePostAPICall();
                 }
             );

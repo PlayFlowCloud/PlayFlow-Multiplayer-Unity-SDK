@@ -39,13 +39,27 @@ namespace PlayFlow
         public IEnumerator RefreshCurrentLobbyCoroutine(string currentLobbyId)
         {
             JObject lobbyJObject = null;
+            bool is404Error = false;
+            
             yield return lobbyActions.GetLobbyCoroutine(currentLobbyId, response => lobbyJObject = response, error =>
             {
-                if (debugLogging) Debug.LogError($"Error refreshing current lobby: {error.Message}");
+                // Check if this is a 404 error (lobby no longer exists)
+                if (error.Message.Contains("404") || error.Message.Contains("Not Found"))
+                {
+                    is404Error = true;
+                    if (debugLogging) Debug.Log($"Lobby {currentLobbyId} no longer exists (404). Clearing current lobby state.");
+                    // Clear the current lobby state since it no longer exists
+                    lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), null);
+                }
+                else
+                {
+                    // Only log as error if it's not a 404
+                    if (debugLogging) Debug.LogError($"Error refreshing current lobby: {error.Message}");
+                }
                 lobbyComparer.ResetCurrentLobbyStatus();
             });
 
-            if (lobbyJObject != null)
+            if (lobbyJObject != null && !is404Error)
             {
                 var newLobby = lobbyJObject.ToObject<Lobby>();
                 lobbyComparer.CompareAndFireLobbyEvents(lobbyComparer.GetCurrentLobby(), newLobby);
@@ -53,7 +67,7 @@ namespace PlayFlow
         }
 
         public IEnumerator RefreshLobbiesCoroutine()
-        {
+            {
             JArray newLobbiesJArray = null;
             yield return lobbyActions.ListLobbiesCoroutine(response => newLobbiesJArray = response, error =>
             {
@@ -61,14 +75,14 @@ namespace PlayFlow
             });
 
             if (newLobbiesJArray != null)
-            {
+                {
                 var newLobbies = newLobbiesJArray.ToObject<List<Lobby>>();
                 List<Lobby> oldLobbies = null;
                 
                 lock (lobbyListLock)
                 {
                     oldLobbies = new List<Lobby>(availableLobbies);
-                    availableLobbies = newLobbies;
+                availableLobbies = newLobbies;
                 }
                 
                 lobbyListEvents?.InvokeLobbiesRefreshed(newLobbies);

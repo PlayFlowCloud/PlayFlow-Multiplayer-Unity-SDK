@@ -66,6 +66,7 @@ public class PlayFlowLobbyManager : MonoBehaviour
     private float _lastRefreshTime;
     private Coroutine _refreshCoroutine;
     private bool _isRefreshing = false;
+    private bool _isLeavingLobby = false;
 
     private void Awake()
     {
@@ -100,14 +101,16 @@ public class PlayFlowLobbyManager : MonoBehaviour
     
     private void Update()
     {
-        if (!autoRefresh || !_isInitialized || _isRefreshing || Time.time - _lastRefreshTime < refreshInterval) return;
+        if (!autoRefresh || !_isInitialized || _isRefreshing || _isLeavingLobby || Time.time - _lastRefreshTime < refreshInterval) return;
         
         _lastRefreshTime = Time.time;
         
         if (_refreshCoroutine == null)
         {
             _isRefreshing = true;
-            if (IsInLobby())
+            // Double-check lobby state before starting refresh
+            var currentLobby = GetCurrentLobby();
+            if (currentLobby != null && !string.IsNullOrEmpty(currentLobby.id))
             {
                 _refreshCoroutine = StartCoroutine(RefreshCurrentLobbyCoroutine());
             }
@@ -139,9 +142,28 @@ public class PlayFlowLobbyManager : MonoBehaviour
     
     private IEnumerator RefreshCurrentLobbyCoroutine()
     {
-        yield return _lobbyRefresher.RefreshCurrentLobbyCoroutine(GetCurrentLobbyId());
+        // Double-check we still have a valid lobby ID before refreshing
+        string lobbyId = GetCurrentLobbyId();
+        if (string.IsNullOrEmpty(lobbyId))
+        {
+            if (debugLogging) Debug.Log("[RefreshCurrentLobbyCoroutine] No current lobby ID, switching to lobby list refresh.");
+            _refreshCoroutine = null;
+            _isRefreshing = false;
+            // Switch to refreshing lobby list instead
+            RefreshLobbies();
+            yield break;
+        }
+        
+        yield return _lobbyRefresher.RefreshCurrentLobbyCoroutine(lobbyId);
         _refreshCoroutine = null;
         _isRefreshing = false;
+        
+        // After refresh, check if we're still in a lobby
+        if (!IsInLobby())
+        {
+            // We're no longer in a lobby, refresh the lobby list instead
+            RefreshLobbies();
+        }
     }
 
     /// <summary>
@@ -199,6 +221,14 @@ public class PlayFlowLobbyManager : MonoBehaviour
             return;
         }
 
+        // Cancel any ongoing refresh to prevent conflicts
+        if (_refreshCoroutine != null)
+        {
+            StopCoroutine(_refreshCoroutine);
+            _refreshCoroutine = null;
+            _isRefreshing = false;
+        }
+
         PlayFlowRequestQueue.Instance.EnqueueOperation(
             "CreateLobby",
             () => _lobbyActions.CreateLobbyCoroutine(lobbyName, maxPlayers, isPrivate, allowLateJoin, region, customLobbySettings, 
@@ -226,6 +256,14 @@ public class PlayFlowLobbyManager : MonoBehaviour
             return;
         }
         
+        // Cancel any ongoing refresh to prevent conflicts
+        if (_refreshCoroutine != null)
+        {
+            StopCoroutine(_refreshCoroutine);
+            _refreshCoroutine = null;
+            _isRefreshing = false;
+        }
+        
         PlayFlowRequestQueue.Instance.EnqueueOperation(
             "JoinLobby",
             () => _lobbyActions.JoinLobbyCoroutine(lobbyId, 
@@ -249,20 +287,36 @@ public class PlayFlowLobbyManager : MonoBehaviour
         if (!IsInLobby()) { onError?.Invoke(new InvalidOperationException("Not in a lobby.")); return; }
         
         string lobbyIdToLeave = GetCurrentLobbyId();
+        
+        // Set flag to prevent refresh attempts while leaving
+        _isLeavingLobby = true;
+        
+        // Cancel any ongoing refresh
+        if (_refreshCoroutine != null)
+        {
+            StopCoroutine(_refreshCoroutine);
+            _refreshCoroutine = null;
+            _isRefreshing = false;
+        }
 
         PlayFlowRequestQueue.Instance.EnqueueOperation(
             "LeaveLobby",
             () => _lobbyActions.LeaveLobbyCoroutine(lobbyIdToLeave,
-                (success) => {
-                    if (success) {
-                        _stateManager.TryUpdateState(null, true);
-                        individualLobbyEvents.InvokeLobbyLeft();
-                        RefreshLobbies();
-                        onSuccess?.Invoke();
-                    }
+                () => {
+                    _stateManager.TryUpdateState(null, true);
+                    individualLobbyEvents.InvokeLobbyLeft();
+                    _isLeavingLobby = false; // Clear flag on success
+                    RefreshLobbies();
+                    onSuccess?.Invoke();
                 },
-                onError),
-            onError
+                (error) => {
+                    _isLeavingLobby = false; // Clear flag on error
+                    onError?.Invoke(error);
+                }),
+            (error) => {
+                _isLeavingLobby = false; // Clear flag if enqueue fails
+                onError?.Invoke(error);
+            }
         );
     }
 
@@ -360,6 +414,7 @@ public class PlayFlowLobbyManager : MonoBehaviour
         
         // Reset flags
         _isRefreshing = false;
+        _isLeavingLobby = false;
         _isInitialized = false;
     }
 }

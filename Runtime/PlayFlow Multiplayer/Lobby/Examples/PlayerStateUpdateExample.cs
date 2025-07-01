@@ -19,6 +19,11 @@ public class PlayerStateUpdateExample : MonoBehaviour
 
     private void Update()
     {
+        if (lobbyManager == null)
+        {
+            return; // Don't proceed if the manager wasn't found
+        }
+        
         if (Input.GetKeyDown(KeyCode.T))
         {
             var playerState = new Dictionary<string, object>

@@ -49,45 +49,41 @@ namespace PlayFlow
         /// </summary>
         public bool TryUpdateState(Lobby newLobby, bool forceUpdate = false)
         {
-            if (newLobby == null) return false;
-            
+            Lobby oldLobby;
+
             lock (updateLock)
             {
-                // If we're already processing an update, reject this one unless forced
                 if (isProcessingUpdate && !forceUpdate)
                 {
                     return false;
                 }
                 
-                // Check for duplicate update
-                if (!forceUpdate && IsDuplicateUpdate(newLobby))
+                if (newLobby == null)
                 {
-                    return false;
+                    if (currentLobby == null) return false; // Already cleared
+                    oldLobby = currentLobby;
+                    currentLobby = null;
+                    ClearStateFields();
                 }
-                
-                isProcessingUpdate = true;
-            }
-            
-            try
-            {
-                Lobby oldLobby = null;
-                lock (updateLock)
+                else
                 {
+                    if (!forceUpdate && IsDuplicateUpdate(newLobby))
+                    {
+                        return false;
+                    }
                     oldLobby = currentLobby;
                     currentLobby = newLobby;
                     stateVersion++;
-                    
-                    // Track this update
                     lastProcessedLobbyId = newLobby.id;
                     lastProcessedUpdateTime = newLobby.updatedAt;
-                    
-                    // Update player state versions
                     UpdatePlayerStateVersions(newLobby);
                 }
-                
-                // Fire state changed event outside of lock to prevent deadlocks
+                isProcessingUpdate = true;
+            }
+
+            try
+            {
                 OnStateChanged?.Invoke(oldLobby, newLobby);
-                
                 return true;
             }
             finally
@@ -178,17 +174,25 @@ namespace PlayFlow
                    currentLobby.lobbyStateRealTime.ContainsKey(playerId);
         }
         
+        private void ClearStateFields()
+        {
+            stateVersion = 0;
+            playerStateVersions.Clear();
+            lastProcessedLobbyId = "";
+            lastProcessedUpdateTime = "";
+        }
+
         /// <summary>
         /// Clear all state
         /// </summary>
         public void Clear()
         {
-            currentLobby = null;
-            stateVersion = 0;
-            playerStateVersions.Clear();
-            isProcessingUpdate = false;
-            lastProcessedLobbyId = "";
-            lastProcessedUpdateTime = "";
+            lock (updateLock)
+            {
+                currentLobby = null;
+                ClearStateFields();
+                isProcessingUpdate = false;
+            }
         }
     }
 } 

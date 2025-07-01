@@ -66,6 +66,13 @@ namespace PlayFlow
                     yield break;
                 }
                 
+                // Handle empty responses (like 204 No Content) gracefully
+                if (string.IsNullOrEmpty(request.downloadHandler.text))
+                {
+                    onSuccess?.Invoke(null);
+                    yield break;
+                }
+                
                 try
                 {
                     var responseJson = request.downloadHandler.text;
