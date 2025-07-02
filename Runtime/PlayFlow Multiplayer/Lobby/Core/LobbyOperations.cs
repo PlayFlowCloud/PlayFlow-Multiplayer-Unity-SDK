@@ -117,7 +117,18 @@ namespace PlayFlow
         public IEnumerator UpdateLobbySettingsCoroutine(string lobbyId, string requesterId, Dictionary<string, object> settings, Action<Lobby> onSuccess, Action<string> onError)
         {
             if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
-            var payload = new JObject { ["settings"] = JObject.FromObject(settings) };
+            
+            // The backend expects settings to be nested: { settings: { settings: { ... } } }
+            // The outer "settings" is the UpdateLobby.settings property
+            // The inner "settings" is the LobbySettings.settings property for custom game data
+            var payload = new JObject 
+            { 
+                ["settings"] = new JObject
+                {
+                    ["settings"] = JObject.FromObject(settings)
+                }
+            };
+            
             yield return _api.UpdateLobby(lobbyId, requesterId, payload, onSuccess, onError);
         }
 
