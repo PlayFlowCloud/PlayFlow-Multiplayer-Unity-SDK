@@ -553,6 +553,13 @@ namespace PlayFlow
         
         private bool ValidateOperation(string operation, Action<string> onError)
         {
+            // If the manager is null or its GameObject is inactive (e.g., during application quit),
+            // silently fail to prevent errors when OnDestroy methods try to call API functions.
+            if (this == null || !gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
             if (!IsReady)
             {
                 var error = $"Cannot {operation}: Manager not initialized";
