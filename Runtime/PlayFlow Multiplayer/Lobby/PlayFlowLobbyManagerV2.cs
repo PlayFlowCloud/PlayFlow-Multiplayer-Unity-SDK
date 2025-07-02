@@ -2,9 +2,20 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace PlayFlow
 {
+    /// <summary>
+    /// A simple data structure to hold server connection information.
+    /// </summary>
+    public struct ConnectionInfo
+    {
+        public string Ip;
+        public int Port;
+    }
+
     /// <summary>
     /// The primary controller for managing PlayFlow lobbies.
     /// This class provides a singleton interface (`Instance`) for all lobby operations.
@@ -81,6 +92,7 @@ namespace PlayFlow
         private LobbyOperations _operations;
         private LobbyRefreshManager _refreshManager;
         private PlayFlowSettings _runtimeSettings;
+        private bool _hasFiredMatchRunningEvent;
         
         /// <summary>
         /// Singleton instance of the Lobby Manager. Access all lobby functionality through this.
@@ -301,9 +313,9 @@ namespace PlayFlow
         }
         
         /// <summary>
-        /// Joins an existing lobby using its unique ID or invite code.
+        /// Joins an existing lobby using its unique ID. For joining with an invite code, use `JoinLobbyByCode`.
         /// </summary>
-        /// <param name="lobbyId">The ID or invite code of the lobby to join.</param>
+        /// <param name="lobbyId">The unique ID (UUID) of the lobby to join.</param>
         /// <param name="onSuccess">Callback invoked with the joined lobby data on success.</param>
         /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void JoinLobby(string lobbyId, Action<Lobby> onSuccess = null, Action<string> onError = null)
@@ -318,6 +330,31 @@ namespace PlayFlow
             }
             
             StartCoroutine(_operations.JoinLobbyCoroutine(lobbyId, PlayerId, lobby =>
+            {
+                _session.SetCurrentLobby(lobby);
+                _events.InvokeLobbyJoined(lobby);
+                onSuccess?.Invoke(lobby);
+            }, onError));
+        }
+        
+        /// <summary>
+        /// Joins an existing private lobby using its invite code.
+        /// </summary>
+        /// <param name="inviteCode">The invite code of the lobby to join.</param>
+        /// <param name="onSuccess">Callback invoked with the joined lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
+        public void JoinLobbyByCode(string inviteCode, Action<Lobby> onSuccess = null, Action<string> onError = null)
+        {
+            if (!ValidateOperation("join lobby by code", onError))
+                return;
+
+            if (string.IsNullOrEmpty(inviteCode))
+            {
+                onError?.Invoke("Invite Code cannot be empty");
+                return;
+            }
+
+            StartCoroutine(_operations.JoinLobbyByCodeCoroutine(inviteCode, PlayerId, lobby =>
             {
                 _session.SetCurrentLobby(lobby);
                 _events.InvokeLobbyJoined(lobby);
@@ -541,6 +578,22 @@ namespace PlayFlow
             {
                 _events.InvokeLobbyUpdated(lobby);
                 CheckForPlayerChanges(lobby);
+
+                // Check if the server is now running and we haven't told the user yet.
+                if (lobby.status == "in_game" && !_hasFiredMatchRunningEvent)
+                {
+                    var connectionInfo = GetGameServerConnectionInfo();
+                    if (connectionInfo.HasValue)
+                    {
+                        _events.InvokeMatchRunning(connectionInfo.Value);
+                        _hasFiredMatchRunningEvent = true;
+                    }
+                }
+                else if (lobby.status != "in_game")
+                {
+                    // Reset the flag when the match is no longer in progress.
+                    _hasFiredMatchRunningEvent = false;
+                }
             }
         }
         
@@ -678,6 +731,52 @@ namespace PlayFlow
                     }
                 },
                 onError);
+        }
+
+        /// <summary>
+        /// Gets the connection details (IP and Port) for the game server if the lobby is in an active match.
+        /// </summary>
+        /// <returns>A ConnectionInfo struct if the server is running, otherwise null.</returns>
+        public ConnectionInfo? GetGameServerConnectionInfo()
+        {
+            if (CurrentLobby?.status != "in_game" || CurrentLobby.gameServer == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                // Parse the gameServer dictionary into a JObject for easier traversal
+                var gameServerJson = JObject.FromObject(CurrentLobby.gameServer);
+                
+                // Explicitly check if the server status is "running".
+                if (gameServerJson["status"]?.ToString() != "running")
+                {
+                    return null;
+                }
+
+                var networkPorts = gameServerJson["network_ports"] as JArray;
+
+                if (networkPorts == null || networkPorts.Count == 0)
+                {
+                    return null;
+                }
+
+                // Find the primary game port (usually UDP) or return the first port available.
+                var gamePort = networkPorts.FirstOrDefault(p => p["protocol"]?.ToString() == "udp")
+                               ?? networkPorts.First();
+
+                return new ConnectionInfo
+                {
+                    Ip = gamePort["host"]?.ToString(),
+                    Port = gamePort["external_port"]?.ToObject<int>() ?? 0
+                };
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[PlayFlowLobbyManager] Error parsing game server info: {e.Message}");
+                return null;
+            }
         }
     }
 } 

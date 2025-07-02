@@ -22,7 +22,7 @@ namespace PlayFlow
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<PlayFlowCore>();
+                    _instance = FindFirstObjectByType<PlayFlowCore>();
                     if (_instance == null)
                     {
                         var go = new GameObject("[PlayFlowCore]");

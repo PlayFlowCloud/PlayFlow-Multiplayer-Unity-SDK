@@ -87,6 +87,30 @@ namespace PlayFlow
             }, onError);
         }
         
+        public IEnumerator JoinLobbyByCode(string inviteCode, string playerId, Action<Lobby> onSuccess, Action<string> onError)
+        {
+            var url = $"{_baseUrl}/lobbies/code/{inviteCode}/players?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
+            var payload = new JObject
+            {
+                ["playerId"] = playerId,
+                ["metadata"] = new JObject { ["displayName"] = "Player" }
+            };
+            var json = payload.ToString();
+
+            yield return _networkManager.Post(url, json, _apiKey, (response) =>
+            {
+                try
+                {
+                    var lobby = JObject.Parse(response).ToObject<Lobby>();
+                    onSuccess?.Invoke(lobby);
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"Failed to parse lobby response: {e.Message}");
+                }
+            }, onError);
+        }
+        
         public IEnumerator LeaveLobby(string lobbyId, string playerId, Action onSuccess, Action<string> onError)
         {
             // Following PlayFlowLobbyActions.cs pattern
@@ -142,16 +166,25 @@ namespace PlayFlow
         {
             var url = $"{_baseUrl}/lobbies/{lobbyId}?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
             
-            // This payload structure allows the backend to verify the requester's permissions (e.g., is host)
-            // and apply the state update to the correct target player.
             var payload = new JObject
             {
-                ["requesterId"] = requesterId,
-                ["playerStates"] = new JObject
+                ["requesterId"] = requesterId
+            };
+
+            // Following the old system's pattern is key. It used "playerState" (singular).
+            // For a self-update, the value is the state object.
+            // For a host-authoritative update, we nest the target player's state under their ID.
+            if (requesterId == targetPlayerId)
+            {
+                payload["playerState"] = JObject.FromObject(state);
+            }
+            else
+            {
+                payload["playerState"] = new JObject
                 {
                     [targetPlayerId] = JObject.FromObject(state)
-                }
-            };
+                };
+            }
             
             var json = payload.ToString();
             
@@ -217,6 +250,7 @@ namespace PlayFlow
                 {
                     // If parsing fails, it might be an empty success response for a different API version
                     // For now, we assume success if no error is thrown and parsing fails.
+                    Debug.LogWarning($"Could not parse response for kick operation, but assuming success. Error: {e.Message}");
                     onSuccess?.Invoke(null); 
                 }
             }, onError);

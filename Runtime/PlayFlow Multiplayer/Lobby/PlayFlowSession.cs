@@ -4,12 +4,6 @@ using System.Collections;
 
 namespace PlayFlow
 {
-    [System.Serializable]
-    public class StateChangedEvent : UnityEvent<LobbyState, LobbyState> { }
-    
-    [System.Serializable]
-    public class LobbyEvent : UnityEvent<Lobby> { }
-    
     public class PlayFlowSession : MonoBehaviour
     {
         [SerializeField] private PlayFlowSettings _settings;

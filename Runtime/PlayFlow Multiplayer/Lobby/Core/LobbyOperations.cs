@@ -40,6 +40,12 @@ namespace PlayFlow
             yield return _api.JoinLobby(lobbyId, playerId, onSuccess, onError);
         }
         
+        public IEnumerator JoinLobbyByCodeCoroutine(string inviteCode, string playerId, Action<Lobby> onSuccess, Action<string> onError)
+        {
+            if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
+            yield return _api.JoinLobbyByCode(inviteCode, playerId, onSuccess, onError);
+        }
+        
         public IEnumerator LeaveLobbyCoroutine(string lobbyId, string playerId, Action onSuccess, Action<string> onError)
         {
             if (_api == null)

@@ -10,6 +10,21 @@ namespace PlayFlow
     [System.Serializable]
     public class ErrorEvent : UnityEvent<string> { }
     
+    [System.Serializable]
+    public class LobbyEvent : UnityEvent<Lobby> { }
+    
+    [System.Serializable]
+    public class ConnectionInfoEvent : UnityEvent<ConnectionInfo> { }
+    
+    [System.Serializable]
+    public class StateChangedEvent : UnityEvent<LobbyState, LobbyState> { }
+    
+    [System.Serializable]
+    public class VoidEvent : UnityEvent { }
+    
+    [System.Serializable]
+    public class StringEvent : UnityEvent<string> { }
+    
     public class PlayFlowEvents : MonoBehaviour
     {
         [Header("Lobby Events")]
@@ -23,11 +38,14 @@ namespace PlayFlow
         public LobbyEvent OnLobbyUpdated = new LobbyEvent();
         
         [Tooltip("Fired when leaving a lobby")]
-        public UnityEvent OnLobbyLeft = new UnityEvent();
+        public VoidEvent OnLobbyLeft = new VoidEvent();
         
         [Header("Match Events")]
         [Tooltip("Fired when the match has started")]
         public LobbyEvent OnMatchStarted = new LobbyEvent();
+        
+        [Tooltip("Fired when the match is running")]
+        public ConnectionInfoEvent OnMatchRunning = new ConnectionInfoEvent();
         
         [Tooltip("Fired when the match has ended")]
         public LobbyEvent OnMatchEnded = new LobbyEvent();
@@ -44,13 +62,13 @@ namespace PlayFlow
         
         [Header("System Events")]
         [Tooltip("Fired when connected to the service")]
-        public UnityEvent OnConnected = new UnityEvent();
+        public VoidEvent OnConnected = new VoidEvent();
         
         [Tooltip("Fired when disconnected from the service")]
-        public UnityEvent OnDisconnected = new UnityEvent();
+        public VoidEvent OnDisconnected = new VoidEvent();
         
         [Tooltip("Fired when an error occurs")]
-        public ErrorEvent OnError = new ErrorEvent();
+        public StringEvent OnError = new StringEvent();
         
         [Header("Debug")]
         [SerializeField] private bool _logEvents = false;
@@ -79,6 +97,11 @@ namespace PlayFlow
         public void InvokeMatchStarted(Lobby lobby)
         {
             SafeInvoke(() => OnMatchStarted?.Invoke(lobby), "MatchStarted", lobby);
+        }
+        
+        public void InvokeMatchRunning(ConnectionInfo info)
+        {
+            SafeInvoke(() => OnMatchRunning?.Invoke(info), "MatchRunning", info);
         }
         
         public void InvokeMatchEnded(Lobby lobby)

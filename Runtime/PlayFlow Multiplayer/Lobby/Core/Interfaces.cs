@@ -33,6 +33,7 @@ namespace PlayFlow
             Action<string> onError);
             
         IEnumerator JoinLobby(string lobbyId, string playerId, Action<Lobby> onSuccess, Action<string> onError);
+        IEnumerator JoinLobbyByCode(string inviteCode, string playerId, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator LeaveLobby(string lobbyId, string playerId, Action onSuccess, Action<string> onError);
         IEnumerator GetLobby(string lobbyId, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator ListLobbies(Action<List<Lobby>> onSuccess, Action<string> onError);

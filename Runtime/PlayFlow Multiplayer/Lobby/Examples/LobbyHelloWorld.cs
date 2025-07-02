@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 using PlayFlow;
+using System.Collections;
 
 /// <summary>
 /// A simple example demonstrating how to use the new PlayFlow Lobby SDK V2.
@@ -24,6 +25,7 @@ using PlayFlow;
 /// - E: End the match (host only)
 /// - T: Send test player state update
 /// - U: Update other player's state (host only)
+/// - I: Get game server connection info
 /// </summary>
 public class LobbyHelloWorld : MonoBehaviour
 {
@@ -71,6 +73,7 @@ public class LobbyHelloWorld : MonoBehaviour
         Debug.Log("  E - End the match");
         Debug.Log("  T - Send test player state");
         Debug.Log("  U - Update other player's state");
+        Debug.Log("  I - Get game server connection info");
     }
     
     void Update()
@@ -123,6 +126,12 @@ public class LobbyHelloWorld : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.U))
         {
             UpdateOtherPlayerState();
+        }
+
+        // Get game server connection info
+        if (Input.GetKeyDown(KeyCode.I))
+        {
+            GetConnectionInfo();
         }
     }
     
@@ -282,6 +291,28 @@ public class LobbyHelloWorld : MonoBehaviour
         );
     }
     
+    void GetConnectionInfo()
+    {
+        var manager = PlayFlowLobbyManagerV2.Instance;
+        if (manager.CurrentLobby?.status != "in_game")
+        {
+            Debug.LogWarning("[LobbyHelloWorld] Cannot get connection info: not in a running match.");
+            return;
+        }
+
+        ConnectionInfo? connectionInfo = manager.GetGameServerConnectionInfo();
+
+        if (connectionInfo.HasValue)
+        {
+            Debug.Log($"[LobbyHelloWorld] Game Server Connection Info: IP = {connectionInfo.Value.Ip}, Port = {connectionInfo.Value.Port}");
+            // Here you would use this information to connect your game client (e.g., using Netcode, Mirror, etc.)
+        }
+        else
+        {
+            Debug.LogError("[LobbyHelloWorld] Failed to get connection info, although the match is running. The gameServer data might be missing.");
+        }
+    }
+    
     void UpdateOtherPlayerState()
     {
         var manager = PlayFlowLobbyManagerV2.Instance;
@@ -345,6 +376,7 @@ public class LobbyHelloWorld : MonoBehaviour
         // Match events
         events.OnMatchStarted.AddListener(OnMatchStarted);
         events.OnMatchEnded.AddListener(OnMatchEnded);
+        events.OnMatchRunning.AddListener(OnMatchRunning);
         
         // Player events
         events.OnPlayerJoined.AddListener(OnPlayerJoined);
@@ -403,7 +435,13 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void OnMatchStarted(Lobby lobby)
     {
-        Debug.Log($"[LobbyHelloWorld] EVENT: Match started in lobby {lobby.name}!");
+        Debug.Log($"[LobbyHelloWorld] EVENT: Match start has been triggered for lobby {lobby.name}. Waiting for server to be ready...");
+    }
+
+    void OnMatchRunning(ConnectionInfo connectionInfo)
+    {
+        Debug.Log($"[LobbyHelloWorld] EVENT: Server is ready! IP: {connectionInfo.Ip}, Port: {connectionInfo.Port}");
+        // Here you would connect your game client using the connectionInfo details.
     }
     
     void OnMatchEnded(Lobby lobby)
@@ -416,6 +454,14 @@ public class LobbyHelloWorld : MonoBehaviour
         // Clean up
         if (PlayFlowLobbyManagerV2.Instance != null)
         {
+            // If the player is in a lobby, make sure they leave it gracefully.
+            if (PlayFlowLobbyManagerV2.Instance.IsInLobby)
+            {
+                // This is a fire-and-forget call. We don't wait for the response
+                // because the application is likely quitting.
+                PlayFlowLobbyManagerV2.Instance.LeaveLobby();
+            }
+            
             PlayFlowLobbyManagerV2.Instance.Disconnect();
             
             // Unsubscribe from events
@@ -426,6 +472,9 @@ public class LobbyHelloWorld : MonoBehaviour
             events.OnLobbyLeft.RemoveAllListeners();
             events.OnPlayerJoined.RemoveAllListeners();
             events.OnPlayerLeft.RemoveAllListeners();
+            events.OnMatchStarted.RemoveAllListeners();
+            events.OnMatchEnded.RemoveAllListeners();
+            events.OnMatchRunning.RemoveAllListeners();
             events.OnError.RemoveAllListeners();
         }
     }
