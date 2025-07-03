@@ -12,7 +12,7 @@
 [![Made with Unity](https://img.shields.io/badge/Made%20with-Unity-57b9d3.svg?style=for-the-badge&logo=unity)](https://unity.com)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](https://opensource.org/licenses/Apache-2.0)
 [![YouTube Channel](https://img.shields.io/badge/YouTube-%40playflow__cloud-red.svg?style=for-the-badge&logo=youtube)](https://www.youtube.com/@playflow_cloud)
-[![Discord](https://img.shields.io/discord/837375669335195688?style=for-the-badge&logo=discord&label=Discord)](https://discord.gg/P5w45Vx5Q8)
+[![Discord](https://img.shields.io/discord/882650237829779546?style=for-the-badge&logo=discord&label=Discord)](https://discord.gg/P5w45Vx5Q8)
 
 </div>
 
