@@ -418,14 +418,14 @@ public class LobbyHelloWorld : MonoBehaviour
         Debug.Log("[LobbyHelloWorld] EVENT: Left lobby");
     }
     
-    void OnPlayerJoined(string playerId, PlayerAction action)
+    void OnPlayerJoined(PlayerAction action)
     {
-        Debug.Log($"[LobbyHelloWorld] EVENT: Player joined - {playerId}");
+        Debug.Log($"[LobbyHelloWorld] EVENT: Player joined - {action.PlayerId}");
     }
     
-    void OnPlayerLeft(string playerId, PlayerAction action)
+    void OnPlayerLeft(PlayerAction action)
     {
-        Debug.Log($"[LobbyHelloWorld] EVENT: Player left - {playerId}");
+        Debug.Log($"[LobbyHelloWorld] EVENT: Player left - {action.PlayerId}");
     }
     
     void OnError(string error)

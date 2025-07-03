@@ -91,11 +91,28 @@ namespace PlayFlow
         Error
     }
     
-    public enum PlayerAction
+    public enum PlayerActionType
     {
-        Joined,
-        Left,
-        StateChanged,
-        Disconnected
+        Join,
+        Leave,
+        Kick,
+        StateChange,
+        Disconnect
+    }
+    
+    public struct PlayerAction
+    {
+        public string PlayerId;
+        public PlayerActionType ActionType;
+
+        public PlayerAction(string playerId, PlayerActionType actionType)
+        {
+            PlayerId = playerId;
+            ActionType = actionType;
+        }
+
+        public static PlayerAction Joined(string playerId) => new PlayerAction(playerId, PlayerActionType.Join);
+        public static PlayerAction Left(string playerId) => new PlayerAction(playerId, PlayerActionType.Leave);
+        public static PlayerAction Kicked(string playerId) => new PlayerAction(playerId, PlayerActionType.Kick);
     }
 } 

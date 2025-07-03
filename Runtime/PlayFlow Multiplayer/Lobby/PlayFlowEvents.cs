@@ -5,7 +5,7 @@ using System;
 namespace PlayFlow
 {
     [System.Serializable]
-    public class PlayerEvent : UnityEvent<string, PlayerAction> { }
+    public class PlayerEvent : UnityEvent<PlayerAction> { }
     
     [System.Serializable]
     public class ErrorEvent : UnityEvent<string> { }
@@ -106,14 +106,14 @@ namespace PlayFlow
             SafeInvoke(() => OnMatchEnded?.Invoke(lobby), "MatchEnded", lobby);
         }
         
-        public void InvokePlayerJoined(string playerId)
+        public void InvokePlayerJoined(PlayerAction action)
         {
-            SafeInvoke(() => OnPlayerJoined?.Invoke(playerId, PlayerAction.Joined), "PlayerJoined", playerId);
+            SafeInvoke(() => OnPlayerJoined?.Invoke(action), "PlayerJoined", action.PlayerId);
         }
         
-        public void InvokePlayerLeft(string playerId, PlayerAction action)
+        public void InvokePlayerLeft(PlayerAction action)
         {
-            SafeInvoke(() => OnPlayerLeft?.Invoke(playerId, action), "PlayerLeft", playerId);
+            SafeInvoke(() => OnPlayerLeft?.Invoke(action), "PlayerLeft", action.PlayerId);
         }
         
         public void InvokeConnected()

@@ -622,7 +622,7 @@ namespace PlayFlow
             {
                 foreach (var playerId in newPlayerIds)
                 {
-                    _events.InvokePlayerJoined(playerId, new PlayerAction(playerId, PlayerActionType.Join));
+                    _events.InvokePlayerJoined(PlayerAction.Joined(playerId));
                 }
             }
             else
@@ -632,10 +632,9 @@ namespace PlayFlow
                 leftPlayerIds.ExceptWith(newPlayerIds);
                 foreach (var playerId in leftPlayerIds)
                 {
-                    var isKick = false; // By default, we assume it's a leave action.
-                    // More complex logic could be added here if the API provides kick info.
-                    var action = new PlayerAction(playerId, isKick ? PlayerActionType.Kick : PlayerActionType.Leave);
-                    _events.InvokePlayerLeft(playerId, action);
+                    // Note: Kick detection would require more info from the API.
+                    // For now, all departures are treated as "Leave".
+                    _events.InvokePlayerLeft(PlayerAction.Left(playerId));
                 }
 
                 // Find players who have joined
@@ -643,7 +642,7 @@ namespace PlayFlow
                 joinedPlayerIds.ExceptWith(_previousPlayerIds);
                 foreach (var playerId in joinedPlayerIds)
                 {
-                    _events.InvokePlayerJoined(playerId, new PlayerAction(playerId, PlayerActionType.Join));
+                    _events.InvokePlayerJoined(PlayerAction.Joined(playerId));
                 }
             }
 
@@ -696,7 +695,8 @@ namespace PlayFlow
             StartCoroutine(_operations.KickPlayerCoroutine(CurrentLobbyId, PlayerId, playerToKickId, lobby =>
             {
                 _session.UpdateCurrentLobby(lobby);
-                _events.InvokePlayerLeft(playerToKickId);
+                // The CheckForPlayerChanges method will handle invoking the OnPlayerLeft event
+                // during the next lobby update, so we don't invoke it directly here.
                 onSuccess?.Invoke(lobby);
             }, onError));
         }
