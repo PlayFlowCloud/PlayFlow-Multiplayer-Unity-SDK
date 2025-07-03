@@ -93,6 +93,7 @@ namespace PlayFlow
         private LobbyRefreshManager _refreshManager;
         private PlayFlowSettings _runtimeSettings;
         private bool _hasFiredMatchRunningEvent;
+        private HashSet<string> _previousPlayerIds = new HashSet<string>();
         
         /// <summary>
         /// Singleton instance of the Lobby Manager. Access all lobby functionality through this.
@@ -381,7 +382,9 @@ namespace PlayFlow
             var lobbyId = CurrentLobby.id;
             StartCoroutine(_operations.LeaveLobbyCoroutine(lobbyId, PlayerId, () =>
             {
+                var lobbyLeft = _session.CurrentLobby;
                 _session.ClearCurrentLobby();
+                _previousPlayerIds.Clear(); // Clear player list on leaving
                 _events.InvokeLobbyLeft();
                 onSuccess?.Invoke();
             }, onError));
@@ -411,7 +414,7 @@ namespace PlayFlow
             StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, PlayerId, state, lobby =>
             {
                 _session.UpdateCurrentLobby(lobby);
-                _events.InvokePlayerStateChanged(PlayerId);
+                // The OnLobbyUpdated event will now be responsible for signaling this change.
                 onSuccess?.Invoke(lobby);
             }, onError));
         }
@@ -435,7 +438,7 @@ namespace PlayFlow
             StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, targetPlayerId, state, lobby =>
             {
                 _session.UpdateCurrentLobby(lobby);
-                _events.InvokePlayerStateChanged(targetPlayerId);
+                // The OnLobbyUpdated event will now be responsible for signaling this change.
                 onSuccess?.Invoke(lobby);
             }, onError));
         }
@@ -583,8 +586,11 @@ namespace PlayFlow
         {
             if (lobby != null)
             {
-                _events.InvokeLobbyUpdated(lobby);
+                // It's important to check for player changes *before* invoking the general update.
+                // This allows listeners on OnPlayerJoined/Left to access the *previous* lobby state if needed.
                 CheckForPlayerChanges(lobby);
+
+                _events.InvokeLobbyUpdated(lobby);
 
                 // Check if the server is now running and we haven't told the user yet.
                 if (lobby.status == "in_game" && !_hasFiredMatchRunningEvent)
@@ -606,8 +612,43 @@ namespace PlayFlow
         
         private void CheckForPlayerChanges(Lobby newLobby)
         {
-            // This would compare with previous lobby state to detect player joins/leaves
-            // For now, we'll rely on the backend to send these events
+            if (this == null || !gameObject.activeInHierarchy) return;
+
+            var newPlayerIds = newLobby?.players != null ? new HashSet<string>(newLobby.players) : new HashSet<string>();
+
+            // If the old list was empty, this is the initial join for this client.
+            // Fire "Joined" for all players, including self.
+            if (_previousPlayerIds.Count == 0 && newPlayerIds.Count > 0)
+            {
+                foreach (var playerId in newPlayerIds)
+                {
+                    _events.InvokePlayerJoined(playerId, new PlayerAction(playerId, PlayerActionType.Join));
+                }
+            }
+            else
+            {
+                // Find players who have left
+                var leftPlayerIds = new HashSet<string>(_previousPlayerIds);
+                leftPlayerIds.ExceptWith(newPlayerIds);
+                foreach (var playerId in leftPlayerIds)
+                {
+                    var isKick = false; // By default, we assume it's a leave action.
+                    // More complex logic could be added here if the API provides kick info.
+                    var action = new PlayerAction(playerId, isKick ? PlayerActionType.Kick : PlayerActionType.Leave);
+                    _events.InvokePlayerLeft(playerId, action);
+                }
+
+                // Find players who have joined
+                var joinedPlayerIds = new HashSet<string>(newPlayerIds);
+                joinedPlayerIds.ExceptWith(_previousPlayerIds);
+                foreach (var playerId in joinedPlayerIds)
+                {
+                    _events.InvokePlayerJoined(playerId, new PlayerAction(playerId, PlayerActionType.Join));
+                }
+            }
+
+            // Update the cache for the next comparison
+            _previousPlayerIds = newPlayerIds;
         }
         
         private void HandleLobbyListRefreshed(List<Lobby> lobbies)

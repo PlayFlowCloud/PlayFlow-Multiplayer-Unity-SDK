@@ -57,9 +57,6 @@ namespace PlayFlow
         [Tooltip("Fired when a player leaves the lobby")]
         public PlayerEvent OnPlayerLeft = new PlayerEvent();
         
-        [Tooltip("Fired when a player's state changes")]
-        public PlayerEvent OnPlayerStateChanged = new PlayerEvent();
-        
         [Header("System Events")]
         [Tooltip("Fired when connected to the service")]
         public VoidEvent OnConnected = new VoidEvent();
@@ -114,14 +111,9 @@ namespace PlayFlow
             SafeInvoke(() => OnPlayerJoined?.Invoke(playerId, PlayerAction.Joined), "PlayerJoined", playerId);
         }
         
-        public void InvokePlayerLeft(string playerId)
+        public void InvokePlayerLeft(string playerId, PlayerAction action)
         {
-            SafeInvoke(() => OnPlayerLeft?.Invoke(playerId, PlayerAction.Left), "PlayerLeft", playerId);
-        }
-        
-        public void InvokePlayerStateChanged(string playerId)
-        {
-            SafeInvoke(() => OnPlayerStateChanged?.Invoke(playerId, PlayerAction.StateChanged), "PlayerStateChanged", playerId);
+            SafeInvoke(() => OnPlayerLeft?.Invoke(playerId, action), "PlayerLeft", playerId);
         }
         
         public void InvokeConnected()
