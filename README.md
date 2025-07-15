@@ -1,14 +1,24 @@
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/PlayFlowCloud/PlayFlow-Multiplayer-Unity-SDK/main/Resources/playflow.png" width="150">
+
 # PlayFlow Multiplayer Unity SDK
+**The complete, production-ready backend for your Unity multiplayer game.**
 
-![PlayFlow](Resources/playflow.png)
+</div>
 
-The all-in-one Unity SDK for dedicated server hosting, lobbies, and skill-based matchmaking. Go from the Unity Editor to a live multiplayer game in minutes.
+<div align="center">
+
+[![Made with Unity](https://img.shields.io/badge/Made%20with-Unity-57b9d3.svg?style=for-the-badge&logo=unity)](https://unity.com)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](https://opensource.org/licenses/Apache-2.0)
+[![YouTube Channel](https://img.shields.io/badge/YouTube-%40playflow__cloud-red.svg?style=for-the-badge&logo=youtube)](https://www.youtube.com/@playflow_cloud)
+[![Discord](https://img.shields.io/discord/882650237829779546?style=for-the-badge&logo=discord&label=Discord)](https://discord.gg/P5w45Vx5Q8)
+
+</div>
 
 ---
 
-## What is the PlayFlow SDK?
-
-The PlayFlow Multiplayer SDK is a comprehensive suite of tools designed to remove the complexity of building and managing a multiplayer game. It provides three core services, all accessible through a unified, easy-to-use Unity package.
+**PlayFlow** is the all-in-one multiplayer platform that handles the complexity of game server hosting, lobbies, and matchmaking, so you can focus on building your game. This official Unity SDK is your gateway to unlocking PlayFlow's powerful features directly in your project.
 
 ## Core Features
 
@@ -27,7 +37,7 @@ The PlayFlow Multiplayer SDK is a comprehensive suite of tools designed to remov
 2.  Click the **'+'** icon and select **"Add package from git URL..."**.
 3.  Enter the following URL and click **Add**:
     ```
-    https://github.com/PlayFlow-Cloud/PlayFlow-Multiplayer-Unity-SDK.git
+    https://github.com/PlayFlowCloud/PlayFlow-Multiplayer-Unity-SDK.git
     ```
 
 ---
