@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
+
 namespace PlayFlow
 {
     /// <summary>
@@ -721,20 +722,86 @@ namespace PlayFlow
         }
 
         /// <summary>
-        /// Updates the lobby's custom settings. This can only be called by the host.
+        /// Updates the lobby's properties. This can only be called by the host when the lobby status is 'waiting'.
+        /// Supported properties: name, maxPlayers, isPrivate, useInviteCode, allowLateJoin, region, settings.
         /// </summary>
-        /// <param name="newSettings">A dictionary of new settings to apply to the lobby.</param>
+        /// <param name="name">The new lobby name (3-50 characters). Pass null to keep current.</param>
+        /// <param name="maxPlayers">The new max players (1-100). Pass null to keep current.</param>
+        /// <param name="isPrivate">Whether the lobby should be private. Pass null to keep current.</param>
+        /// <param name="useInviteCode">Whether to use invite codes. Pass null to keep current.</param>
+        /// <param name="allowLateJoin">Whether to allow late joins. Pass null to keep current.</param>
+        /// <param name="region">The new region (e.g., "us-west", "eu-north"). Pass null to keep current.</param>
+        /// <param name="customSettings">New custom game settings. Pass null to keep current.</param>
+        /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
+        public void UpdateLobby(
+            string name = null,
+            int? maxPlayers = null,
+            bool? isPrivate = null,
+            bool? useInviteCode = null,
+            bool? allowLateJoin = null,
+            string region = null,
+            Dictionary<string, object> customSettings = null,
+            Action<Lobby> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (!ValidateOperation("update lobby", onError)) return;
+            if (!IsHost) { onError?.Invoke("Only the host can update lobby settings."); return; }
+            if (CurrentLobby?.status == "in_game") { onError?.Invoke("Cannot update lobby settings during an active game."); return; }
+
+            // Validate parameters
+            if (name != null && (name.Length < 3 || name.Length > 50))
+            {
+                onError?.Invoke("Lobby name must be between 3 and 50 characters.");
+                return;
+            }
+            if (maxPlayers.HasValue && (maxPlayers.Value < 1 || maxPlayers.Value > 100))
+            {
+                onError?.Invoke("Max players must be between 1 and 100.");
+                return;
+            }
+
+            StartCoroutine(_operations.UpdateLobbyCoroutine(
+                CurrentLobbyId, PlayerId, name, maxPlayers, isPrivate, 
+                useInviteCode, allowLateJoin, region, customSettings,
+                lobby =>
+                {
+                    _session.UpdateCurrentLobby(lobby);
+                    onSuccess?.Invoke(lobby);
+                }, onError));
+        }
+
+        /// <summary>
+        /// Updates only the lobby's custom game settings. This can only be called by the host.
+        /// This is a convenience method that only updates the custom settings without touching other properties.
+        /// </summary>
+        /// <param name="newSettings">A dictionary of new custom game settings (gameMode, mapName, scoreLimit, etc.).</param>
         /// <param name="onSuccess">Callback invoked with the updated lobby data on success.</param>
         /// <param name="onError">Callback invoked with an error message on failure.</param>
         public void UpdateLobbySettings(Dictionary<string, object> newSettings, Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
-            if (!ValidateOperation("update lobby settings", onError)) return;
-            if (!IsHost) { onError?.Invoke("Only the host can update lobby settings."); return; }
+            UpdateLobby(customSettings: newSettings, onSuccess: onSuccess, onError: onError);
+        }
 
-            StartCoroutine(_operations.UpdateLobbySettingsCoroutine(CurrentLobbyId, PlayerId, newSettings, lobby =>
+        /// <summary>
+        /// Deletes the entire lobby. This can only be called by the host.
+        /// All players will be removed from the lobby.
+        /// </summary>
+        /// <param name="onSuccess">Callback invoked when the lobby is successfully deleted.</param>
+        /// <param name="onError">Callback invoked with an error message on failure.</param>
+        public void DeleteLobby(Action onSuccess = null, Action<string> onError = null)
+        {
+            if (!ValidateOperation("delete lobby", onError)) return;
+            if (!IsHost) { onError?.Invoke("Only the host can delete the lobby."); return; }
+            if (!IsInLobby) { onError?.Invoke("Not in a lobby."); return; }
+
+            var lobbyId = CurrentLobbyId;
+            StartCoroutine(_operations.DeleteLobbyCoroutine(lobbyId, PlayerId, () =>
             {
-                _session.UpdateCurrentLobby(lobby);
-                onSuccess?.Invoke(lobby);
+                _session.ClearCurrentLobby();
+                _previousPlayerIds.Clear();
+                _events.InvokeLobbyLeft(); // Trigger the left event since the lobby no longer exists
+                onSuccess?.Invoke();
             }, onError));
         }
 

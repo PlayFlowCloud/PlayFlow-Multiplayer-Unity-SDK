@@ -114,22 +114,56 @@ namespace PlayFlow
             yield return _api.UpdateLobby(lobbyId, requesterId, payload, onSuccess, onError);
         }
 
-        public IEnumerator UpdateLobbySettingsCoroutine(string lobbyId, string requesterId, Dictionary<string, object> settings, Action<Lobby> onSuccess, Action<string> onError)
+        public IEnumerator UpdateLobbyCoroutine(
+            string lobbyId, 
+            string requesterId, 
+            string name,
+            int? maxPlayers,
+            bool? isPrivate,
+            bool? useInviteCode,
+            bool? allowLateJoin,
+            string region,
+            Dictionary<string, object> customSettings,
+            Action<Lobby> onSuccess, 
+            Action<string> onError)
         {
             if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
             
-            // The backend expects settings to be nested: { settings: { settings: { ... } } }
-            // The outer "settings" is the UpdateLobby.settings property
-            // The inner "settings" is the LobbySettings.settings property for custom game data
-            var payload = new JObject 
-            { 
-                ["settings"] = new JObject
+            var payload = new JObject();
+            
+            // Only add properties that are being updated (not null)
+            if (name != null) payload["name"] = name;
+            if (maxPlayers.HasValue) payload["maxPlayers"] = maxPlayers.Value;
+            if (isPrivate.HasValue) payload["isPrivate"] = isPrivate.Value;
+            if (useInviteCode.HasValue) payload["useInviteCode"] = useInviteCode.Value;
+            if (allowLateJoin.HasValue) payload["allowLateJoin"] = allowLateJoin.Value;
+            if (region != null) payload["region"] = region;
+            
+            // Handle custom settings with proper nesting
+            if (customSettings != null)
+            {
+                payload["settings"] = new JObject
                 {
-                    ["settings"] = JObject.FromObject(settings)
-                }
-            };
+                    ["settings"] = JObject.FromObject(customSettings)
+                };
+            }
             
             yield return _api.UpdateLobby(lobbyId, requesterId, payload, onSuccess, onError);
+        }
+
+        public IEnumerator DeleteLobbyCoroutine(string lobbyId, string requesterId, Action onSuccess, Action<string> onError)
+        {
+            if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
+            
+            // Use the LobbyClient directly for delete operation
+            var client = new LobbyClient(PlayFlowCore.Instance.Settings.baseUrl, PlayFlowCore.Instance.Settings.apiKey);
+            yield return client.DeleteLobbyCoroutine(
+                PlayFlowCore.Instance.Settings.defaultLobbyConfig,
+                lobbyId,
+                requesterId,
+                _ => onSuccess?.Invoke(), // Convert JObject response to simple callback
+                ex => onError?.Invoke(ex.Message)
+            );
         }
 
         public IEnumerator FindLobbyByPlayerIdCoroutine(string playerId, Action<Lobby> onSuccess, Action<string> onError)
