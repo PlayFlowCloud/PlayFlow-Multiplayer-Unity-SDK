@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using PlayFlow;
 using System.Collections;
+using Newtonsoft.Json;
 
 /// <summary>
 /// A simple example demonstrating how to use the new PlayFlow Lobby SDK V2.
@@ -416,6 +417,148 @@ public class LobbyHelloWorld : MonoBehaviour
     void OnLobbyLeft()
     {
         Debug.Log("[LobbyHelloWorld] EVENT: Left lobby");
+    }
+    
+    // =============================================================================
+    // PLAYER STATE UPDATE EXAMPLES
+    // =============================================================================
+    
+    /// <summary>
+    /// Example: Update your own player state
+    /// Any player can update their own state at any time
+    /// </summary>
+    public void UpdateMyOwnState()
+    {
+        // Check if we're in a lobby
+        if (!PlayFlowLobbyManagerV2.Instance.IsInLobby)
+        {
+            Debug.LogWarning("Not in a lobby!");
+            return;
+        }
+        
+        // Create your player state data
+        var myState = new Dictionary<string, object>
+        {
+            ["position"] = new Dictionary<string, float> { ["x"] = 100f, ["y"] = 50f, ["z"] = 0f },
+            ["health"] = 85,
+            ["armor"] = 50,
+            ["weapon"] = "plasma_rifle",
+            ["team"] = "blue",
+            ["ready"] = true,
+            ["lastUpdated"] = DateTime.UtcNow.ToString()
+        };
+        
+        // Update your own state
+        PlayFlowLobbyManagerV2.Instance.UpdatePlayerState(myState, 
+            onSuccess: (lobby) => {
+                Debug.Log($"Successfully updated my state. My player ID: {PlayFlowLobbyManagerV2.Instance.PlayerId}");
+                
+                // You can access your updated state from the lobby
+                if (lobby.lobbyStateRealTime.TryGetValue(PlayFlowLobbyManagerV2.Instance.PlayerId, out var updatedState))
+                {
+                    Debug.Log($"My updated state: {JsonConvert.SerializeObject(updatedState)}");
+                }
+            },
+            onError: (error) => {
+                Debug.LogError($"Failed to update my state: {error}");
+            }
+        );
+    }
+    
+    /// <summary>
+    /// Example: Host updates another player's state
+    /// Only the host can update other players' states
+    /// </summary>
+    public void HostUpdateAnotherPlayerState(string targetPlayerId)
+    {
+        // Check if we're in a lobby
+        if (!PlayFlowLobbyManagerV2.Instance.IsInLobby)
+        {
+            Debug.LogWarning("Not in a lobby!");
+            return;
+        }
+        
+        // Check if we're the host
+        if (!PlayFlowLobbyManagerV2.Instance.IsHost)
+        {
+            Debug.LogError("Only the host can update other players' states!");
+            return;
+        }
+        
+        // Verify target player is in the lobby
+        var currentLobby = PlayFlowLobbyManagerV2.Instance.CurrentLobby;
+        if (!currentLobby.players.Contains(targetPlayerId))
+        {
+            Debug.LogError($"Player {targetPlayerId} is not in the lobby!");
+            return;
+        }
+        
+        // Create state data for the target player
+        var targetPlayerState = new Dictionary<string, object>
+        {
+            ["team"] = "red",  // Host assigns player to red team
+            ["role"] = "sniper",  // Host assigns player role
+            ["spawnPoint"] = new Dictionary<string, float> { ["x"] = 200f, ["y"] = 100f, ["z"] = 50f },
+            ["allowedWeapons"] = new List<string> { "sniper_rifle", "pistol" },
+            ["updatedByHost"] = true,
+            ["hostUpdatedAt"] = DateTime.UtcNow.ToString()
+        };
+        
+        // Update the target player's state
+        PlayFlowLobbyManagerV2.Instance.UpdateStateForPlayer(targetPlayerId, targetPlayerState,
+            onSuccess: (lobby) => {
+                Debug.Log($"Host successfully updated state for player: {targetPlayerId}");
+                
+                // Verify the update
+                if (lobby.lobbyStateRealTime.TryGetValue(targetPlayerId, out var updatedState))
+                {
+                    Debug.Log($"Target player's updated state: {JsonConvert.SerializeObject(updatedState)}");
+                }
+            },
+            onError: (error) => {
+                Debug.LogError($"Failed to update player {targetPlayerId}'s state: {error}");
+            }
+        );
+    }
+    
+    /// <summary>
+    /// Example: Host assigns teams to all players
+    /// Demonstrates batch updates by the host
+    /// </summary>
+    public void HostAssignTeamsToAllPlayers()
+    {
+        if (!PlayFlowLobbyManagerV2.Instance.IsInLobby || !PlayFlowLobbyManagerV2.Instance.IsHost)
+        {
+            Debug.LogError("Must be host and in lobby to assign teams!");
+            return;
+        }
+        
+        var players = PlayFlowLobbyManagerV2.Instance.CurrentLobby.players;
+        var teamAssignments = new[] { "blue", "red" };
+        
+        for (int i = 0; i < players.Count(); i++)
+        {
+            var playerId = players[i];
+            var team = teamAssignments[i % 2]; // Alternate between blue and red
+            
+            var teamState = new Dictionary<string, object>
+            {
+                ["team"] = team,
+                ["teamAssignedAt"] = DateTime.UtcNow.ToString()
+            };
+            
+            // Skip if it's the host's own ID - use UpdatePlayerState instead
+            if (playerId == PlayFlowLobbyManagerV2.Instance.PlayerId)
+            {
+                PlayFlowLobbyManagerV2.Instance.UpdatePlayerState(teamState);
+            }
+            else
+            {
+                PlayFlowLobbyManagerV2.Instance.UpdateStateForPlayer(playerId, teamState);
+            }
+        }
+        
+        Debug.Log("Host assigned teams to all players!");
     }
     
     void OnPlayerJoined(PlayerAction action)

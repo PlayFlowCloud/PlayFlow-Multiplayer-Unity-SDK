@@ -171,19 +171,13 @@ namespace PlayFlow
                 ["requesterId"] = requesterId
             };
 
-            // Following the old system's pattern is key. It used "playerState" (singular).
-            // For a self-update, the value is the state object.
-            // For a host-authoritative update, we nest the target player's state under their ID.
-            if (requesterId == targetPlayerId)
+            // Set the player state directly
+            payload["playerState"] = JObject.FromObject(state);
+            
+            // If host is updating another player, add targetPlayerId
+            if (requesterId != targetPlayerId)
             {
-                payload["playerState"] = JObject.FromObject(state);
-            }
-            else
-            {
-                payload["playerState"] = new JObject
-                {
-                    [targetPlayerId] = JObject.FromObject(state)
-                };
+                payload["targetPlayerId"] = targetPlayerId;
             }
             
             var json = payload.ToString();

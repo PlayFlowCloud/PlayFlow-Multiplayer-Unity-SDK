@@ -62,10 +62,10 @@ namespace PlayFlow
                 return;
             }
             
-            var wasInLobby = IsInLobby;
+            var wasInLobby = _currentLobby != null;
             _currentLobby = lobby;
             
-            if (!wasInLobby)
+            if (!wasInLobby || _currentState != LobbyState.InLobby)
             {
                 ChangeState(LobbyState.InLobby);
             }
