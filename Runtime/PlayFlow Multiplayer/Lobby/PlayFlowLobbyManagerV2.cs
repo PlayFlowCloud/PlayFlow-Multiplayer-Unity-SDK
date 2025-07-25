@@ -414,6 +414,11 @@ namespace PlayFlow
             // A player updates their own state, so requester and target are the same.
             StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, PlayerId, state, lobby =>
             {
+                // Mark this update as coming from API to help with deduplication
+                if (_refreshManager != null)
+                {
+                    _refreshManager.MarkLocalUpdate(lobby);
+                }
                 _session.UpdateCurrentLobby(lobby);
                 // The OnLobbyUpdated event will now be responsible for signaling this change.
                 onSuccess?.Invoke(lobby);
@@ -438,6 +443,11 @@ namespace PlayFlow
             var lobbyId = CurrentLobby.id;
             StartCoroutine(_operations.UpdatePlayerStateCoroutine(lobbyId, PlayerId, targetPlayerId, state, lobby =>
             {
+                // Mark this update as coming from API to help with deduplication
+                if (_refreshManager != null)
+                {
+                    _refreshManager.MarkLocalUpdate(lobby);
+                }
                 _session.UpdateCurrentLobby(lobby);
                 // The OnLobbyUpdated event will now be responsible for signaling this change.
                 onSuccess?.Invoke(lobby);
@@ -478,6 +488,7 @@ namespace PlayFlow
             var lobbyId = CurrentLobby.id;
             StartCoroutine(_operations.UpdateLobbyStatusCoroutine(lobbyId, PlayerId, "in_game", lobby =>
             {
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 _session.UpdateCurrentLobby(lobby);
                 _events.InvokeMatchStarted(lobby);
                 onSuccess?.Invoke(lobby);
@@ -502,6 +513,7 @@ namespace PlayFlow
             var lobbyId = CurrentLobby.id;
             StartCoroutine(_operations.UpdateLobbyStatusCoroutine(lobbyId, PlayerId, "waiting", lobby =>
             {
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 _session.UpdateCurrentLobby(lobby);
                 _events.InvokeMatchEnded(lobby);
                 onSuccess?.Invoke(lobby);
@@ -695,6 +707,7 @@ namespace PlayFlow
 
             StartCoroutine(_operations.KickPlayerCoroutine(CurrentLobbyId, PlayerId, playerToKickId, lobby =>
             {
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 _session.UpdateCurrentLobby(lobby);
                 // The CheckForPlayerChanges method will handle invoking the OnPlayerLeft event
                 // during the next lobby update, so we don't invoke it directly here.
@@ -766,6 +779,7 @@ namespace PlayFlow
                 useInviteCode, allowLateJoin, region, customSettings,
                 lobby =>
                 {
+                    if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                     _session.UpdateCurrentLobby(lobby);
                     onSuccess?.Invoke(lobby);
                 }, onError));

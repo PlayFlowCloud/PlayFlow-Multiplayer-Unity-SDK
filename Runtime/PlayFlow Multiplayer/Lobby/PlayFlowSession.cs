@@ -72,11 +72,14 @@ namespace PlayFlow
             
             OnLobbyUpdated?.Invoke(lobby);
             
-            // Start auto-refresh if not already running
+            // Auto-refresh is now handled by LobbyRefreshManager with SSE support
+            // Commenting out to prevent duplicate polling
+            /*
             if (_refreshCoroutine == null && _settings != null)
             {
                 _refreshCoroutine = StartCoroutine(AutoRefreshCoroutine());
             }
+            */
         }
         
         public void UpdateCurrentLobby(Lobby newLobby)

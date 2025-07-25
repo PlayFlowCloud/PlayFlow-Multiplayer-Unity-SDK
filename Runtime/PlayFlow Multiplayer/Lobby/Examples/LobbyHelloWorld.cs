@@ -412,6 +412,17 @@ public class LobbyHelloWorld : MonoBehaviour
     void OnLobbyUpdated(Lobby lobby)
     {
         Debug.Log($"[LobbyHelloWorld] EVENT: Lobby updated - {lobby.name} ({lobby.currentPlayers}/{lobby.maxPlayers})");
+        
+        // Check if SSE is connected
+        var sseManager = LobbySseManager.Instance;
+        if (sseManager != null && sseManager.IsConnected)
+        {
+            Debug.Log("[LobbyHelloWorld] ✅ Update received via SSE (real-time)");
+        }
+        else
+        {
+            Debug.Log("[LobbyHelloWorld] ⏱️ Update received via polling");
+        }
     }
     
     void OnLobbyLeft()
