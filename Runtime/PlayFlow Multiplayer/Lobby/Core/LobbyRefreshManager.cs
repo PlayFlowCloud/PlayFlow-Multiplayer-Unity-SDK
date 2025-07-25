@@ -16,8 +16,6 @@ namespace PlayFlow
         private bool _isSSEConnected = false;
         private string _currentSSELobbyId = null;
         private LobbyUpdateDeduplicator _deduplicator = new LobbyUpdateDeduplicator();
-        private GameServerStatusPoller _serverPoller;
-        private bool _isPollingForServerLaunch = false;
         
         public event Action<List<Lobby>> OnLobbyListRefreshed;
         
@@ -53,10 +51,6 @@ namespace PlayFlow
             {
                 _lobbyManager.Events.OnLobbyUpdated.AddListener(HandleSessionLobbyChanged);
             }
-            
-            // Initialize game server status poller
-            _serverPoller = GetComponent<GameServerStatusPoller>() ?? gameObject.AddComponent<GameServerStatusPoller>();
-            _serverPoller.Initialize(_operations);
             
             // Start the refresh loop here, after settings are assigned
             if (_settings != null && _settings.autoRefresh && _lobbyManager != null && _refreshCoroutine == null)
@@ -102,51 +96,20 @@ namespace PlayFlow
                 
                 if (_lobbyManager != null && _lobbyManager.IsInLobby && _lobbyManager.CurrentLobby != null)
                 {
-                    bool shouldPoll = false;
-                    
-                    // Check if we need to poll for server launching status
-                    if (_lobbyManager.CurrentLobby.status == "in_game" && !_isPollingForServerLaunch)
-                    {
-                        var gameServer = _lobbyManager.CurrentLobby.gameServer;
-                        if (gameServer != null && gameServer.ContainsKey("status"))
-                        {
-                            string serverStatus = gameServer["status"]?.ToString();
-                            if (serverStatus == "launching")
-                            {
-                                // Start dedicated polling for server launch
-                                _isPollingForServerLaunch = true;
-                                _serverPoller.StartPollingForServerLaunch(
-                                    _lobbyManager.CurrentLobby.id,
-                                    lobby => {
-                                        _isPollingForServerLaunch = false;
-                                        _lobbyManager.UpdateCurrentLobby(lobby); // This should be the method on the manager
-                                        // Fire match running event if we have events component
-                                        if (_events != null)
-                                        {
-                                            _events.InvokeMatchRunning(ExtractConnectionInfo(lobby));
-                                        }
-                                    },
-                                    error => {
-                                        _isPollingForServerLaunch = false;
-                                        Debug.LogError($"[LobbyRefreshManager] Server launch failed: {error}");
-                                    }
-                                );
-                            }
-                        }
-                    }
-                    
-                    // Skip regular refresh if SSE is connected or we're polling for server launch
-                    shouldPoll = (!_isSSEConnected || _currentSSELobbyId != _lobbyManager.CurrentLobby.id) && !_isPollingForServerLaunch;
+                    // Skip regular refresh if SSE is connected
+                    bool shouldPoll = !_isSSEConnected || _currentSSELobbyId != _lobbyManager.CurrentLobby.id;
                     
                     if (shouldPoll)
                     {
-                        Debug.Log($"[LobbyRefreshManager] Polling lobby {_lobbyManager.CurrentLobby.id} - SSE Connected: {_isSSEConnected}, SSE Lobby ID: {_currentSSELobbyId}");
+                        if (_settings.debugLogging)
+                        {
+                            Debug.Log($"[LobbyRefreshManager] Polling lobby {_lobbyManager.CurrentLobby.id} - SSE Connected: {_isSSEConnected}, SSE Lobby ID: {_currentSSELobbyId}");
+                        }
                         yield return RefreshCurrentLobby(_lobbyManager.CurrentLobby.id);
                     }
                     else if (_settings.debugLogging)
                     {
-                        string reason = _isPollingForServerLaunch ? "polling for server launch" : "SSE active";
-                        Debug.Log($"[LobbyRefreshManager] Skipping regular poll - {reason} for lobby {_lobbyManager.CurrentLobby.id}");
+                        Debug.Log($"[LobbyRefreshManager] Skipping regular poll - SSE active for lobby {_lobbyManager.CurrentLobby.id}");
                     }
                 }
                 else
@@ -173,9 +136,13 @@ namespace PlayFlow
             );
         }
         
+        
         private IEnumerator RefreshCurrentLobby(string lobbyId)
         {
-            Debug.LogWarning($"[LobbyRefreshManager] ⚠️ POLLING lobby {lobbyId} via HTTP (this should not happen with SSE active!)");
+            if (!_isSSEConnected)
+            {
+                Debug.LogWarning($"[LobbyRefreshManager] ⚠️ POLLING lobby {lobbyId} via HTTP (SSE not connected)");
+            }
             yield return _operations.GetLobbyCoroutine(lobbyId, 
                 lobby => 
                 {
@@ -304,16 +271,19 @@ namespace PlayFlow
         {
             _isSSEConnected = true;
             Debug.Log("[LobbyRefreshManager] ✅ SSE connected successfully - pausing polling for current lobby");
+            
+            // Force refresh the current lobby state when SSE reconnects to ensure we have latest data
+            if (_lobbyManager != null && _lobbyManager.CurrentLobby != null)
+            {
+                StartCoroutine(RefreshCurrentLobby(_lobbyManager.CurrentLobby.id));
+            }
         }
         
         private void HandleSSEDisconnected()
         {
             _isSSEConnected = false;
             
-            if (_settings?.debugLogging ?? false)
-            {
-                Debug.Log("[LobbyRefreshManager] SSE disconnected - resuming polling");
-            }
+            Debug.Log("[LobbyRefreshManager] ⚠️ SSE disconnected - resuming polling for lobby updates");
         }
         
         private void HandleSSELobbyUpdate(Lobby lobby)
@@ -340,13 +310,7 @@ namespace PlayFlow
                     if (oldStatus == "launching" && newStatus == "running")
                     {
                         wasLaunching = true;
-                        // Stop any active server polling since SSE delivered the update
-                        if (_isPollingForServerLaunch)
-                        {
-                            Debug.Log($"[LobbyRefreshManager] SSE delivered server running status - stopping server polling");
-                            _serverPoller?.StopPolling();
-                            _isPollingForServerLaunch = false;
-                        }
+                        Debug.Log($"[LobbyRefreshManager] SSE delivered server running status");
                     }
                 }
                 
@@ -415,12 +379,6 @@ namespace PlayFlow
         
         private void OnDestroy()
         {
-            // Stop server polling if active
-            if (_serverPoller != null)
-            {
-                _serverPoller.StopPolling();
-            }
-            
             // Unsubscribe from SSE events
             if (_sseManager != null)
             {

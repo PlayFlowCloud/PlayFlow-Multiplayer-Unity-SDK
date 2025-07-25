@@ -29,8 +29,12 @@ namespace PlayFlow
         private Coroutine _sseCoroutine;
         private Coroutine _reconnectCoroutine;
         private Coroutine _heartbeatCoroutine;
+        private Coroutine _periodicRetryCoroutine;
         private float _lastDataReceived;
         private bool _isPaused = false;
+        private float _lastSuccessfulConnection = 0f;
+        private bool _hasReachedMaxAttempts = false;
+        private float _periodicRetryInterval = 10f; // Try SSE again every 60 seconds when in polling mode
         
         // Events for internal use
         public event Action OnConnected;
@@ -109,12 +113,21 @@ namespace PlayFlow
             
             _currentLobbyId = lobbyId;
             _shouldReconnect = true;
+            
+            // Reset retry state when connecting to a new lobby
             _reconnectAttempts = 0;
             _reconnectDelay = 1f;
+            _hasReachedMaxAttempts = false;
             
             if (_sseCoroutine == null && !_isPaused)
             {
                 _sseCoroutine = StartCoroutine(SSEConnectionCoroutine());
+            }
+            
+            // Start periodic retry if not already running
+            if (_periodicRetryCoroutine == null)
+            {
+                _periodicRetryCoroutine = StartCoroutine(PeriodicSSERetryCoroutine());
             }
         }
         
@@ -126,6 +139,13 @@ namespace PlayFlow
             _shouldReconnect = false;
             _currentLobbyId = null;
             StopConnectionCoroutines(true);
+            
+            // Stop periodic retry when disconnecting
+            if (_periodicRetryCoroutine != null)
+            {
+                StopCoroutine(_periodicRetryCoroutine);
+                _periodicRetryCoroutine = null;
+            }
         }
 
         /// <summary>
@@ -242,8 +262,13 @@ namespace PlayFlow
             
             if (_reconnectAttempts >= _maxReconnectAttempts)
             {
-                OnError?.Invoke($"Failed to reconnect after {_maxReconnectAttempts} attempts");
-                _shouldReconnect = false;
+                if (!_hasReachedMaxAttempts)
+                {
+                    _hasReachedMaxAttempts = true;
+                    OnError?.Invoke($"Failed to reconnect after {_maxReconnectAttempts} attempts. Will retry periodically.");
+                    Debug.Log("[LobbySseManager] Max reconnect attempts reached. Switching to periodic retry mode.");
+                }
+                // Don't set _shouldReconnect = false anymore - let periodic retry handle it
                 yield break;
             }
             
@@ -262,8 +287,10 @@ namespace PlayFlow
         internal void HandleSSEMessage(string eventType, string data)
         {
             _lastDataReceived = Time.time;
+            _lastSuccessfulConnection = Time.time;
             _reconnectAttempts = 0; // Reset on successful data
             _reconnectDelay = 1f; // Reset delay on success
+            _hasReachedMaxAttempts = false; // Reset max attempts flag
             
             try
             {
@@ -276,8 +303,10 @@ namespace PlayFlow
                         if (lobby != null)
                         {
                             IsConnected = true;
+                            _lastSuccessfulConnection = Time.time;
                             OnConnected?.Invoke();
                             OnLobbyUpdated?.Invoke(lobby);
+                            Debug.Log("[LobbySseManager] ✅ SSE connection established successfully");
                         }
                         break;
                         
@@ -302,6 +331,34 @@ namespace PlayFlow
             catch (Exception e)
             {
                 OnError?.Invoke($"Failed to parse SSE message: {e.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Periodically attempts to reconnect to SSE when in polling mode
+        /// </summary>
+        private IEnumerator PeriodicSSERetryCoroutine()
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(_periodicRetryInterval);
+                
+                // Only retry if we're not connected, have a lobby, and have reached max attempts
+                if (!IsConnected && !string.IsNullOrEmpty(_currentLobbyId) && _hasReachedMaxAttempts && !_isPaused)
+                {
+                    Debug.Log("[LobbySseManager] Attempting periodic SSE reconnection...");
+                    
+                    // Reset retry state for a fresh attempt
+                    _reconnectAttempts = 0;
+                    _reconnectDelay = 1f;
+                    _hasReachedMaxAttempts = false;
+                    
+                    // Try to connect again
+                    if (_sseCoroutine == null)
+                    {
+                        _sseCoroutine = StartCoroutine(SSEConnectionCoroutine());
+                    }
+                }
             }
         }
         
