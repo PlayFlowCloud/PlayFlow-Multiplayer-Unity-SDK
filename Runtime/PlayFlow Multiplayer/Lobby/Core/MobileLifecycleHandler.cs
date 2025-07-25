@@ -8,11 +8,14 @@ namespace PlayFlow
     internal class MobileLifecycleHandler : MonoBehaviour
     {
         private LobbySseManager _sseManager;
+        private bool _debugLogging;
         
         void Start()
         {
             _sseManager = LobbySseManager.Instance;
             DontDestroyOnLoad(gameObject);
+            // Get debug logging setting from the lobby manager
+            _debugLogging = PlayFlowLobbyManagerV2.Instance?.Debugging ?? false;
         }
         
 #if UNITY_IOS || UNITY_ANDROID
@@ -23,13 +26,19 @@ namespace PlayFlow
             if (pauseStatus)
             {
                 // App is going to background
-                Debug.Log("[MobileLifecycleHandler] App pausing - pausing SSE connection.");
+                if (_debugLogging)
+                {
+                    Debug.Log("[MobileLifecycleHandler] App pausing - pausing SSE connection.");
+                }
                 _sseManager.Pause();
             }
             else
             {
                 // App is coming back to foreground
-                Debug.Log("[MobileLifecycleHandler] App resuming - resuming SSE connection.");
+                if (_debugLogging)
+                {
+                    Debug.Log("[MobileLifecycleHandler] App resuming - resuming SSE connection.");
+                }
                 _sseManager.Resume();
             }
         }

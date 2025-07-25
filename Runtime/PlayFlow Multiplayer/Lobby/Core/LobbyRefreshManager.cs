@@ -139,7 +139,7 @@ namespace PlayFlow
         
         private IEnumerator RefreshCurrentLobby(string lobbyId)
         {
-            if (!_isSSEConnected)
+            if (!_isSSEConnected && (_settings?.debugLogging ?? false))
             {
                 Debug.LogWarning($"[LobbyRefreshManager] ⚠️ POLLING lobby {lobbyId} via HTTP (SSE not connected)");
             }
@@ -222,7 +222,10 @@ namespace PlayFlow
             if (lobby != null && _deduplicator != null)
             {
                 _deduplicator.IsDuplicateUpdate(lobby); // Pre-record it
-                Debug.Log($"[LobbyRefreshManager] Marked local API update for lobby {lobby.id}");
+                if (_settings?.debugLogging ?? false)
+                {
+                    Debug.Log($"[LobbyRefreshManager] Marked local API update for lobby {lobby.id}");
+                }
             }
         }
         
@@ -235,7 +238,10 @@ namespace PlayFlow
                 // Left lobby, disconnect SSE
                 if (_currentSSELobbyId != null)
                 {
-                    Debug.Log($"[LobbyRefreshManager] Left lobby, disconnecting SSE from {_currentSSELobbyId}");
+                    if (_settings?.debugLogging ?? false)
+                    {
+                        Debug.Log($"[LobbyRefreshManager] Left lobby, disconnecting SSE from {_currentSSELobbyId}");
+                    }
                     _sseManager?.Disconnect();
                     _currentSSELobbyId = null;
                     _isSSEConnected = false;
@@ -257,7 +263,10 @@ namespace PlayFlow
                         _settings.baseUrl
                     );
                     
-                    Debug.Log($"[LobbyRefreshManager] Joined lobby {lobby.id}, connecting SSE for player {_lobbyManager.PlayerId}...");
+                    if (_settings?.debugLogging ?? false)
+                    {
+                        Debug.Log($"[LobbyRefreshManager] Joined lobby {lobby.id}, connecting SSE for player {_lobbyManager.PlayerId}...");
+                    }
                     _sseManager.ConnectToLobby(lobby.id);
                 }
                 else
@@ -270,7 +279,10 @@ namespace PlayFlow
         private void HandleSSEConnected()
         {
             _isSSEConnected = true;
-            Debug.Log("[LobbyRefreshManager] ✅ SSE connected successfully - pausing polling for current lobby");
+            if (_settings?.debugLogging ?? false)
+            {
+                Debug.Log("[LobbyRefreshManager] ✅ SSE connected successfully - pausing polling for current lobby");
+            }
             
             // Force refresh the current lobby state when SSE reconnects to ensure we have latest data
             if (_lobbyManager != null && _lobbyManager.CurrentLobby != null)
@@ -283,7 +295,10 @@ namespace PlayFlow
         {
             _isSSEConnected = false;
             
-            Debug.Log("[LobbyRefreshManager] ⚠️ SSE disconnected - resuming polling for lobby updates");
+            if (_settings?.debugLogging ?? false)
+            {
+                Debug.Log("[LobbyRefreshManager] ⚠️ SSE disconnected - resuming polling for lobby updates");
+            }
         }
         
         private void HandleSSELobbyUpdate(Lobby lobby)
@@ -294,7 +309,10 @@ namespace PlayFlow
                 // Check for duplicate updates (from API response + SSE)
                 if (_deduplicator.IsDuplicateUpdate(lobby))
                 {
-                    Debug.Log($"[LobbyRefreshManager] Skipping duplicate SSE update for lobby {lobby.id}");
+                    if (_settings.debugLogging)
+                    {
+                        Debug.Log($"[LobbyRefreshManager] Skipping duplicate SSE update for lobby {lobby.id} (API response already processed)");
+                    }
                     return;
                 }
                 
@@ -310,18 +328,27 @@ namespace PlayFlow
                     if (oldStatus == "launching" && newStatus == "running")
                     {
                         wasLaunching = true;
-                        Debug.Log($"[LobbyRefreshManager] SSE delivered server running status");
+                        if (_settings?.debugLogging ?? false)
+                        {
+                            Debug.Log($"[LobbyRefreshManager] SSE delivered server running status");
+                        }
                     }
                 }
                 
                 _lobbyManager.UpdateCurrentLobby(lobby);
                 
-                Debug.Log($"[LobbyRefreshManager] Received SSE update for lobby {lobby.id} - Status: {lobby.status}");
+                if (_settings?.debugLogging ?? false)
+                {
+                    Debug.Log($"[LobbyRefreshManager] Received SSE update for lobby {lobby.id} - Status: {lobby.status}");
+                }
                 
                 // Fire match running event if server just became ready
                 if (wasLaunching && _events != null)
                 {
-                    Debug.Log($"[LobbyRefreshManager] ✅ Game server is now running! (via SSE)");
+                    if (_settings?.debugLogging ?? false)
+                    {
+                        Debug.Log($"[LobbyRefreshManager] ✅ Game server is now running! (via SSE)");
+                    }
                     _events.InvokeMatchRunning(ExtractConnectionInfo(lobby));
                 }
             }
@@ -364,7 +391,10 @@ namespace PlayFlow
                         string host = port["host"]?.ToString() ?? "";
                         int externalPort = port["external_port"] != null ? Convert.ToInt32(port["external_port"]) : 0;
                         
-                        Debug.Log($"[LobbyRefreshManager] Extracted connection info: {host}:{externalPort}");
+                        if (_settings?.debugLogging ?? false)
+                        {
+                            Debug.Log($"[LobbyRefreshManager] Extracted connection info: {host}:{externalPort}");
+                        }
                         return new ConnectionInfo { Ip = host, Port = externalPort };
                     }
                 }

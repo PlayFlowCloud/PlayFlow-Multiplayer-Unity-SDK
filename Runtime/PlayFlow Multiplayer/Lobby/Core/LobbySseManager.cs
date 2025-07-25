@@ -34,7 +34,8 @@ namespace PlayFlow
         private bool _isPaused = false;
         private float _lastSuccessfulConnection = 0f;
         private bool _hasReachedMaxAttempts = false;
-        private float _periodicRetryInterval = 10f; // Try SSE again every 60 seconds when in polling mode
+        private float _periodicRetryInterval = 10f; // Try SSE again every 10 seconds when in polling mode
+        private bool _debugLogging = false;
         
         // Events for internal use
         public event Action OnConnected;
@@ -75,14 +76,18 @@ namespace PlayFlow
         /// <summary>
         /// Initialize SSE manager with connection parameters
         /// </summary>
-        public void Initialize(string playerId, string apiKey, string lobbyConfigName, string baseUrl)
+        public void Initialize(string playerId, string apiKey, string lobbyConfigName, string baseUrl, bool debugLogging = false)
         {
             _playerId = playerId;
             _apiKey = apiKey;
             _lobbyConfigName = lobbyConfigName;
             _baseUrl = baseUrl?.TrimEnd('/') ?? "https://backend.computeflow.cloud";
+            _debugLogging = debugLogging;
             
-            Debug.Log($"[LobbySseManager] Initialized - PlayerId: {_playerId}, Config: {_lobbyConfigName}, URL: {_baseUrl}");
+            if (_debugLogging)
+            {
+                Debug.Log($"[LobbySseManager] Initialized - PlayerId: {_playerId}, Config: {_lobbyConfigName}, URL: {_baseUrl}");
+            }
         }
         
         /// <summary>
@@ -103,7 +108,10 @@ namespace PlayFlow
                 return;
             }
             
-            Debug.Log($"[LobbySseManager] ConnectToLobby called for lobby: {lobbyId}, player: {_playerId}");
+            if (_debugLogging)
+            {
+                Debug.Log($"[LobbySseManager] ConnectToLobby called for lobby: {lobbyId}, player: {_playerId}");
+            }
             
             // Disconnect from previous lobby if any
             if (_currentLobbyId != lobbyId)
@@ -154,7 +162,10 @@ namespace PlayFlow
         public void Pause()
         {
             if (_isPaused) return;
-            Debug.Log("[LobbySseManager] Pausing SSE connection.");
+            if (_debugLogging)
+            {
+                Debug.Log("[LobbySseManager] Pausing SSE connection.");
+            }
             _isPaused = true;
             StopConnectionCoroutines(false); // Stop connection but keep lobby context
         }
@@ -165,7 +176,10 @@ namespace PlayFlow
         public void Resume()
         {
             if (!_isPaused) return;
-            Debug.Log("[LobbySseManager] Resuming SSE connection.");
+            if (_debugLogging)
+            {
+                Debug.Log("[LobbySseManager] Resuming SSE connection.");
+            }
             _isPaused = false;
             
             // Re-trigger connection if we have a lobby ID and are not already connecting
@@ -215,7 +229,10 @@ namespace PlayFlow
             string queryString = $"?player-id={UnityWebRequest.EscapeURL(_playerId)}&lobby-config={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
             string fullUrl = sseUrl + queryString;
             
-            Debug.Log($"[LobbySseManager] Connecting to SSE URL: {fullUrl}");
+            if (_debugLogging)
+            {
+                Debug.Log($"[LobbySseManager] Connecting to SSE URL: {fullUrl}");
+            }
             
             using (var request = UnityWebRequest.Get(fullUrl))
             {
@@ -266,7 +283,10 @@ namespace PlayFlow
                 {
                     _hasReachedMaxAttempts = true;
                     OnError?.Invoke($"Failed to reconnect after {_maxReconnectAttempts} attempts. Will retry periodically.");
-                    Debug.Log("[LobbySseManager] Max reconnect attempts reached. Switching to periodic retry mode.");
+                    if (_debugLogging)
+                    {
+                        Debug.Log("[LobbySseManager] Max reconnect attempts reached. Switching to periodic retry mode.");
+                    }
                 }
                 // Don't set _shouldReconnect = false anymore - let periodic retry handle it
                 yield break;
@@ -297,7 +317,10 @@ namespace PlayFlow
                 switch (eventType)
                 {
                     case "connected":
-                        Debug.Log($"[LobbySseManager] Received 'connected' event");
+                        if (_debugLogging)
+                        {
+                            Debug.Log($"[LobbySseManager] Received 'connected' event");
+                        }
                         var connectedData = JObject.Parse(data);
                         var lobby = connectedData["lobby"]?.ToObject<Lobby>();
                         if (lobby != null)
@@ -306,7 +329,10 @@ namespace PlayFlow
                             _lastSuccessfulConnection = Time.time;
                             OnConnected?.Invoke();
                             OnLobbyUpdated?.Invoke(lobby);
-                            Debug.Log("[LobbySseManager] ✅ SSE connection established successfully");
+                            if (_debugLogging)
+                            {
+                                Debug.Log("[LobbySseManager] ✅ SSE connection established successfully");
+                            }
                         }
                         break;
                         
@@ -346,7 +372,10 @@ namespace PlayFlow
                 // Only retry if we're not connected, have a lobby, and have reached max attempts
                 if (!IsConnected && !string.IsNullOrEmpty(_currentLobbyId) && _hasReachedMaxAttempts && !_isPaused)
                 {
-                    Debug.Log("[LobbySseManager] Attempting periodic SSE reconnection...");
+                    if (_debugLogging)
+                    {
+                        Debug.Log("[LobbySseManager] Attempting periodic SSE reconnection...");
+                    }
                     
                     // Reset retry state for a fresh attempt
                     _reconnectAttempts = 0;
