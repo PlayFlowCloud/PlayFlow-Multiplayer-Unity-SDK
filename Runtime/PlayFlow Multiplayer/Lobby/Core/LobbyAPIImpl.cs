@@ -283,5 +283,34 @@ namespace PlayFlow
                 }
             }, customErrorHandler);
         }
+
+        public IEnumerator DeleteLobby(string lobbyId, string requesterId, Action onSuccess, Action<string> onError)
+        {
+            var url = $"{_baseUrl}/lobbies/{lobbyId}?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
+            var payload = new JObject { ["playerId"] = requesterId };
+            var json = payload.ToString();
+
+            // Use a custom POST request with a body for DELETE, as UnityWebRequest.Delete doesn't support it.
+            using (var request = new UnityWebRequest(url, "DELETE"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                request.SetRequestHeader("api-key", _apiKey);
+
+                yield return request.SendWebRequest();
+
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    onSuccess?.Invoke();
+                }
+                else
+                {
+                    onError?.Invoke($"API Error: {request.error} - {request.downloadHandler.text}");
+                }
+            }
+        }
     }
-} 
+}
+ 

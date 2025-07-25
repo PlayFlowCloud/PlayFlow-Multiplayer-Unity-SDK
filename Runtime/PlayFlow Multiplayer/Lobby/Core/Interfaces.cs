@@ -5,11 +5,6 @@ using System.Collections.Generic;
 namespace PlayFlow
 {
     // Network interfaces
-    public interface INetworkQueue
-    {
-        void EnqueueRequest(NetworkRequest request);
-    }
-    
     public interface INetworkManager
     {
         IEnumerator Get(string url, string apiKey, System.Action<string> onSuccess, System.Action<string> onError);
@@ -42,16 +37,7 @@ namespace PlayFlow
         IEnumerator KickPlayer(string lobbyId, string requesterId, string playerToKickId, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator UpdateLobby(string lobbyId, string requesterId, Newtonsoft.Json.Linq.JObject payload, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator FindLobbyByPlayerId(string playerId, Action<Lobby> onSuccess, Action<string> onError);
-    }
-    
-    public interface ILobbyCache
-    {
-        void SetCurrentLobby(Lobby lobby);
-        Lobby GetCurrentLobby();
-        void ClearCurrentLobby();
-        void SetAvailableLobbies(List<Lobby> lobbies);
-        List<Lobby> GetAvailableLobbies();
-        bool TryGetLobby(string lobbyId, out Lobby lobby);
+        IEnumerator DeleteLobby(string lobbyId, string requesterId, Action onSuccess, Action<string> onError);
     }
     
     public interface IEventDispatcher
@@ -62,26 +48,6 @@ namespace PlayFlow
     }
     
     // Data structures
-    public class NetworkRequest
-    {
-        public string Endpoint { get; set; }
-        public string Method { get; set; } = "GET";
-        public string Data { get; set; }
-        public Dictionary<string, string> Headers { get; set; }
-        public Action<NetworkResponse> OnSuccess { get; set; }
-        public Action<string> OnError { get; set; }
-        public Action<float> OnProgress { get; set; }
-        public int RetryCount { get; set; }
-        public bool IsComplete { get; set; }
-    }
-    
-    public class NetworkResponse
-    {
-        public long StatusCode { get; set; }
-        public string Data { get; set; }
-        public Dictionary<string, string> Headers { get; set; }
-    }
-    
     public enum LobbyState
     {
         Disconnected,
@@ -115,4 +81,5 @@ namespace PlayFlow
         public static PlayerAction Left(string playerId) => new PlayerAction(playerId, PlayerActionType.Leave);
         public static PlayerAction Kicked(string playerId) => new PlayerAction(playerId, PlayerActionType.Kick);
     }
-} 
+}
+ 

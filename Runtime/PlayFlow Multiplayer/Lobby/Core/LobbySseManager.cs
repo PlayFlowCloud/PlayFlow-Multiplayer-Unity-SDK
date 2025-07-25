@@ -30,7 +30,6 @@ namespace PlayFlow
         private Coroutine _reconnectCoroutine;
         private Coroutine _heartbeatCoroutine;
         private float _lastDataReceived;
-        private float _connectionTimeout = 60f;
         private bool _isPaused = false;
         
         // Events for internal use
@@ -105,7 +104,7 @@ namespace PlayFlow
             // Disconnect from previous lobby if any
             if (_currentLobbyId != lobbyId)
             {
-                Disconnect();
+                StopConnectionCoroutines(false); // Stop connection but don't clear lobbyId yet
             }
             
             _currentLobbyId = lobbyId;
@@ -120,13 +119,49 @@ namespace PlayFlow
         }
         
         /// <summary>
-        /// Disconnect from current SSE connection
+        /// Disconnect from current SSE connection and clear lobby context.
         /// </summary>
         public void Disconnect()
         {
             _shouldReconnect = false;
             _currentLobbyId = null;
+            StopConnectionCoroutines(true);
+        }
+
+        /// <summary>
+        /// Pauses the SSE connection, typically when the app goes into the background.
+        /// </summary>
+        public void Pause()
+        {
+            if (_isPaused) return;
+            Debug.Log("[LobbySseManager] Pausing SSE connection.");
+            _isPaused = true;
+            StopConnectionCoroutines(false); // Stop connection but keep lobby context
+        }
+
+        /// <summary>
+        /// Resumes the SSE connection, typically when the app returns to the foreground.
+        /// </summary>
+        public void Resume()
+        {
+            if (!_isPaused) return;
+            Debug.Log("[LobbySseManager] Resuming SSE connection.");
+            _isPaused = false;
             
+            // Re-trigger connection if we have a lobby ID and are not already connecting
+            if (!string.IsNullOrEmpty(_currentLobbyId) && _sseCoroutine == null)
+            {
+                ConnectToLobby(_currentLobbyId);
+            }
+        }
+
+        private void StopConnectionCoroutines(bool clearLobbyId)
+        {
+            if (clearLobbyId)
+            {
+                _currentLobbyId = null;
+            }
+
             if (_sseCoroutine != null)
             {
                 StopCoroutine(_sseCoroutine);
@@ -177,7 +212,7 @@ namespace PlayFlow
                     Debug.LogError($"[LobbySseManager] {error}");
                     OnError?.Invoke(error);
                     
-                    if (_shouldReconnect && _reconnectCoroutine == null)
+                    if (_shouldReconnect && _reconnectCoroutine == null && !_isPaused)
                     {
                         _reconnectCoroutine = StartCoroutine(ReconnectCoroutine());
                     }

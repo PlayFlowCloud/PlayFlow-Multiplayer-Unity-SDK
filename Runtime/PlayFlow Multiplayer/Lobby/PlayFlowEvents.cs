@@ -66,6 +66,10 @@ namespace PlayFlow
         
         [Tooltip("Fired when an error occurs")]
         public StringEvent OnError = new StringEvent();
+
+        [Header("State Events")]
+        [Tooltip("Fired when the lobby connection state changes (e.g., from Connected to InLobby)")]
+        public StateChangedEvent OnStateChanged = new StateChangedEvent();
         
         [Header("Debug")]
         [SerializeField] private bool _logEvents = false;

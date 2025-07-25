@@ -8,7 +8,6 @@ namespace PlayFlow
     internal class MobileLifecycleHandler : MonoBehaviour
     {
         private LobbySseManager _sseManager;
-        private bool _wasConnected = false;
         
         void Start()
         {
@@ -24,33 +23,13 @@ namespace PlayFlow
             if (pauseStatus)
             {
                 // App is going to background
-                Debug.Log("[MobileLifecycleHandler] App pausing - disconnecting SSE");
-                _wasConnected = _sseManager.IsConnected;
+                Debug.Log("[MobileLifecycleHandler] App pausing - pausing SSE connection.");
                 _sseManager.Pause();
             }
             else
             {
                 // App is coming back to foreground
-                Debug.Log("[MobileLifecycleHandler] App resuming - reconnecting SSE");
-                if (_wasConnected)
-                {
-                    _sseManager.Resume();
-                }
-            }
-        }
-        
-        void OnApplicationFocus(bool hasFocus)
-        {
-            if (_sseManager == null) return;
-            
-            // iOS sometimes uses focus instead of pause
-            if (!hasFocus && _sseManager.IsConnected)
-            {
-                Debug.Log("[MobileLifecycleHandler] App lost focus - may disconnect SSE");
-            }
-            else if (hasFocus && _wasConnected && !_sseManager.IsConnected)
-            {
-                Debug.Log("[MobileLifecycleHandler] App regained focus - reconnecting SSE");
+                Debug.Log("[MobileLifecycleHandler] App resuming - resuming SSE connection.");
                 _sseManager.Resume();
             }
         }

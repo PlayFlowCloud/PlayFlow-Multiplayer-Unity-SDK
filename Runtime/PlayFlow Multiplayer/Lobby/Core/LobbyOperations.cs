@@ -154,16 +154,7 @@ namespace PlayFlow
         public IEnumerator DeleteLobbyCoroutine(string lobbyId, string requesterId, Action onSuccess, Action<string> onError)
         {
             if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
-            
-            // Use the LobbyClient directly for delete operation
-            var client = new LobbyClient(PlayFlowCore.Instance.Settings.baseUrl, PlayFlowCore.Instance.Settings.apiKey);
-            yield return client.DeleteLobbyCoroutine(
-                PlayFlowCore.Instance.Settings.defaultLobbyConfig,
-                lobbyId,
-                requesterId,
-                _ => onSuccess?.Invoke(), // Convert JObject response to simple callback
-                ex => onError?.Invoke(ex.Message)
-            );
+            yield return _api.DeleteLobby(lobbyId, requesterId, onSuccess, onError);
         }
 
         public IEnumerator FindLobbyByPlayerIdCoroutine(string playerId, Action<Lobby> onSuccess, Action<string> onError)
@@ -172,4 +163,5 @@ namespace PlayFlow
             yield return _api.FindLobbyByPlayerId(playerId, onSuccess, onError);
         }
     }
-} 
+}
+ 

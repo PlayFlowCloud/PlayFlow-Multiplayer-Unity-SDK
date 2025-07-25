@@ -387,8 +387,8 @@ public class LobbyHelloWorld : MonoBehaviour
         events.OnError.AddListener(OnError);
         
         // Session state changes
-        var session = PlayFlowLobbyManagerV2.Instance.GetComponent<PlayFlowSession>();
-        session.OnStateChanged.AddListener(OnStateChanged);
+        var manager = PlayFlowLobbyManagerV2.Instance;
+        manager.Events.OnStateChanged.AddListener(OnStateChanged);
     }
     
     // Event handlers

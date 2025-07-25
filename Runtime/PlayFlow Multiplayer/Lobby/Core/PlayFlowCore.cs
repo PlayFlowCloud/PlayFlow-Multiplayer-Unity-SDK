@@ -10,9 +10,7 @@ namespace PlayFlow
         
         // Core services
         public ILobbyAPI LobbyAPI { get; private set; }
-        public ILobbyCache LobbyCache { get; private set; }
         public IEventDispatcher EventDispatcher { get; private set; }
-        public INetworkQueue NetworkQueue { get; private set; }
         
         public PlayFlowSettings Settings => _settings;
         
@@ -84,9 +82,7 @@ namespace PlayFlow
             var unityEventDispatcher = eventDispatcherGO.AddComponent<UnityEventDispatcher>();
             
             LobbyAPI = new LobbyAPIImpl(_settings.baseUrl, _settings.apiKey, _settings.defaultLobbyConfig, networkManager);
-            LobbyCache = new LobbyCacheImpl();
             EventDispatcher = unityEventDispatcher;
-            NetworkQueue = networkManager;
             
             if (_settings.debugLogging)
             {
@@ -102,4 +98,5 @@ namespace PlayFlow
             }
         }
     }
-} 
+}
+ 

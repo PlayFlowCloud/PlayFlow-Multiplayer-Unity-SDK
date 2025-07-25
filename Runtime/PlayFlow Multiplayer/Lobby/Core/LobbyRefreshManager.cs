@@ -9,7 +9,7 @@ namespace PlayFlow
     {
         private PlayFlowSettings _settings;
         private LobbyOperations _operations;
-        private PlayFlowSession _session;
+        private PlayFlowLobbyManagerV2 _lobbyManager; // Changed from PlayFlowSession
         private PlayFlowEvents _events;
         private Coroutine _refreshCoroutine;
         private LobbySseManager _sseManager;
@@ -25,7 +25,7 @@ namespace PlayFlow
         {
             _settings = settings;
             _operations = operations;
-            _session = GetComponent<PlayFlowSession>();
+            _lobbyManager = PlayFlowLobbyManagerV2.Instance; // Get the singleton instance
             _events = GetComponent<PlayFlowEvents>();
             
             // Initialize SSE manager
@@ -49,9 +49,9 @@ namespace PlayFlow
             _sseManager.OnError += HandleSSEError;
             
             // Subscribe to session events to know when we join/leave lobbies
-            if (_session != null)
+            if (_lobbyManager != null)
             {
-                _session.OnLobbyUpdated.AddListener(HandleSessionLobbyChanged);
+                _lobbyManager.Events.OnLobbyUpdated.AddListener(HandleSessionLobbyChanged);
             }
             
             // Initialize game server status poller
@@ -59,7 +59,7 @@ namespace PlayFlow
             _serverPoller.Initialize(_operations);
             
             // Start the refresh loop here, after settings are assigned
-            if (_settings != null && _settings.autoRefresh && _session != null && _refreshCoroutine == null)
+            if (_settings != null && _settings.autoRefresh && _lobbyManager != null && _refreshCoroutine == null)
             {
                 _refreshCoroutine = StartCoroutine(RefreshLoop());
             }
@@ -69,7 +69,7 @@ namespace PlayFlow
         {
             // The loop is now started in Initialize, but we can add a safety check here
             // in case the component is disabled and re-enabled at runtime.
-            if (_settings != null && _settings.autoRefresh && _session != null && _refreshCoroutine == null)
+            if (_settings != null && _settings.autoRefresh && _lobbyManager != null && _refreshCoroutine == null)
             {
                 _refreshCoroutine = StartCoroutine(RefreshLoop());
             }
@@ -100,14 +100,14 @@ namespace PlayFlow
             {
                 yield return wait;
                 
-                if (_session != null && _session.IsInLobby && _session.CurrentLobby != null)
+                if (_lobbyManager != null && _lobbyManager.IsInLobby && _lobbyManager.CurrentLobby != null)
                 {
                     bool shouldPoll = false;
                     
                     // Check if we need to poll for server launching status
-                    if (_session.CurrentLobby.status == "in_game" && !_isPollingForServerLaunch)
+                    if (_lobbyManager.CurrentLobby.status == "in_game" && !_isPollingForServerLaunch)
                     {
-                        var gameServer = _session.CurrentLobby.gameServer;
+                        var gameServer = _lobbyManager.CurrentLobby.gameServer;
                         if (gameServer != null && gameServer.ContainsKey("status"))
                         {
                             string serverStatus = gameServer["status"]?.ToString();
@@ -116,10 +116,10 @@ namespace PlayFlow
                                 // Start dedicated polling for server launch
                                 _isPollingForServerLaunch = true;
                                 _serverPoller.StartPollingForServerLaunch(
-                                    _session.CurrentLobby.id,
+                                    _lobbyManager.CurrentLobby.id,
                                     lobby => {
                                         _isPollingForServerLaunch = false;
-                                        _session.UpdateCurrentLobby(lobby);
+                                        _lobbyManager.UpdateCurrentLobby(lobby); // This should be the method on the manager
                                         // Fire match running event if we have events component
                                         if (_events != null)
                                         {
@@ -136,17 +136,17 @@ namespace PlayFlow
                     }
                     
                     // Skip regular refresh if SSE is connected or we're polling for server launch
-                    shouldPoll = (!_isSSEConnected || _currentSSELobbyId != _session.CurrentLobby.id) && !_isPollingForServerLaunch;
+                    shouldPoll = (!_isSSEConnected || _currentSSELobbyId != _lobbyManager.CurrentLobby.id) && !_isPollingForServerLaunch;
                     
                     if (shouldPoll)
                     {
-                        Debug.Log($"[LobbyRefreshManager] Polling lobby {_session.CurrentLobby.id} - SSE Connected: {_isSSEConnected}, SSE Lobby ID: {_currentSSELobbyId}");
-                        yield return RefreshCurrentLobby(_session.CurrentLobby.id);
+                        Debug.Log($"[LobbyRefreshManager] Polling lobby {_lobbyManager.CurrentLobby.id} - SSE Connected: {_isSSEConnected}, SSE Lobby ID: {_currentSSELobbyId}");
+                        yield return RefreshCurrentLobby(_lobbyManager.CurrentLobby.id);
                     }
                     else if (_settings.debugLogging)
                     {
                         string reason = _isPollingForServerLaunch ? "polling for server launch" : "SSE active";
-                        Debug.Log($"[LobbyRefreshManager] Skipping regular poll - {reason} for lobby {_session.CurrentLobby.id}");
+                        Debug.Log($"[LobbyRefreshManager] Skipping regular poll - {reason} for lobby {_lobbyManager.CurrentLobby.id}");
                     }
                 }
                 else
@@ -179,11 +179,11 @@ namespace PlayFlow
             yield return _operations.GetLobbyCoroutine(lobbyId, 
                 lobby => 
                 {
-                    if (_session != null && _session.CurrentLobby?.id == lobby.id)
+                    if (_lobbyManager != null && _lobbyManager.CurrentLobby?.id == lobby.id)
                     {
                         // Mark this as a local update to potentially deduplicate SSE
                         _deduplicator.IsDuplicateUpdate(lobby); // Pre-record it
-                        _session.UpdateCurrentLobby(lobby);
+                        _lobbyManager.UpdateCurrentLobby(lobby);
                     }
                 },
                 error => 
@@ -191,9 +191,9 @@ namespace PlayFlow
                     if (error.Contains("404") || error.Contains("Not Found"))
                     {
                         // Lobby no longer exists, clear it
-                        if (_session != null)
+                        if (_lobbyManager != null)
                         {
-                            _session.ClearCurrentLobby();
+                            _lobbyManager.ClearCurrentLobby();
                         }
                         
                         if (_settings.debugLogging)
@@ -210,9 +210,9 @@ namespace PlayFlow
         
         public void ForceRefresh()
         {
-            if (_session != null && _session.IsInLobby && _session.CurrentLobby != null)
+            if (_lobbyManager != null && _lobbyManager.IsInLobby && _lobbyManager.CurrentLobby != null)
             {
-                StartCoroutine(RefreshCurrentLobby(_session.CurrentLobby.id));
+                StartCoroutine(RefreshCurrentLobby(_lobbyManager.CurrentLobby.id));
             }
             else
             {
@@ -236,7 +236,7 @@ namespace PlayFlow
         
         public void ResumeRefresh()
         {
-            if (_settings != null && _settings.autoRefresh && _session != null && _refreshCoroutine == null)
+            if (_settings != null && _settings.autoRefresh && _lobbyManager != null && _refreshCoroutine == null)
             {
                 _refreshCoroutine = StartCoroutine(RefreshLoop());
                 
@@ -281,16 +281,16 @@ namespace PlayFlow
                 _isSSEConnected = false;
                 
                 // Initialize SSE manager with current session data if not already done
-                if (_sseManager != null && _session != null && !string.IsNullOrEmpty(_session.PlayerId))
+                if (_sseManager != null && _lobbyManager != null && !string.IsNullOrEmpty(_lobbyManager.PlayerId))
                 {
                     _sseManager.Initialize(
-                        _session.PlayerId,
+                        _lobbyManager.PlayerId,
                         _settings.apiKey,
                         _settings.defaultLobbyConfig,
                         _settings.baseUrl
                     );
                     
-                    Debug.Log($"[LobbyRefreshManager] Joined lobby {lobby.id}, connecting SSE for player {_session.PlayerId}...");
+                    Debug.Log($"[LobbyRefreshManager] Joined lobby {lobby.id}, connecting SSE for player {_lobbyManager.PlayerId}...");
                     _sseManager.ConnectToLobby(lobby.id);
                 }
                 else
@@ -319,7 +319,7 @@ namespace PlayFlow
         private void HandleSSELobbyUpdate(Lobby lobby)
         {
             // Update the session with the latest lobby data from SSE
-            if (_session != null && lobby != null && lobby.id == _currentSSELobbyId)
+            if (_lobbyManager != null && lobby != null && lobby.id == _currentSSELobbyId)
             {
                 // Check for duplicate updates (from API response + SSE)
                 if (_deduplicator.IsDuplicateUpdate(lobby))
@@ -330,10 +330,10 @@ namespace PlayFlow
                 
                 // Check if this is a server status update from launching to running
                 bool wasLaunching = false;
-                if (_session.CurrentLobby?.gameServer != null && lobby.gameServer != null)
+                if (_lobbyManager.CurrentLobby?.gameServer != null && lobby.gameServer != null)
                 {
-                    var oldStatus = _session.CurrentLobby.gameServer.ContainsKey("status") ? 
-                        _session.CurrentLobby.gameServer["status"]?.ToString() : "";
+                    var oldStatus = _lobbyManager.CurrentLobby.gameServer.ContainsKey("status") ? 
+                        _lobbyManager.CurrentLobby.gameServer["status"]?.ToString() : "";
                     var newStatus = lobby.gameServer.ContainsKey("status") ? 
                         lobby.gameServer["status"]?.ToString() : "";
                     
@@ -350,7 +350,7 @@ namespace PlayFlow
                     }
                 }
                 
-                _session.UpdateCurrentLobby(lobby);
+                _lobbyManager.UpdateCurrentLobby(lobby);
                 
                 Debug.Log($"[LobbyRefreshManager] Received SSE update for lobby {lobby.id} - Status: {lobby.status}");
                 
@@ -367,7 +367,7 @@ namespace PlayFlow
         {
             if (lobbyId == _currentSSELobbyId)
             {
-                _session?.ClearCurrentLobby();
+                _lobbyManager?.ClearCurrentLobby();
                 _currentSSELobbyId = null;
                 _isSSEConnected = false;
                 
@@ -432,9 +432,9 @@ namespace PlayFlow
             }
             
             // Unsubscribe from session events
-            if (_session != null)
+            if (_lobbyManager != null)
             {
-                _session.OnLobbyUpdated.RemoveListener(HandleSessionLobbyChanged);
+                _lobbyManager.Events.OnLobbyUpdated.RemoveListener(HandleSessionLobbyChanged);
             }
         }
     }
