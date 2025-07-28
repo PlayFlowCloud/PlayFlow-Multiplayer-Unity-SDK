@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Security;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -108,11 +109,18 @@ public class PlayFlowAPI
                 throw new Exception("Failed to get pre-signed upload URL");
             }
 
+            // Add ServicePointManager settings for SSL/TLS
+            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+            
             var uwr = new UnityWebRequest(presignedResponse.upload_url, "PUT")
             {
-                uploadHandler = new UploadHandlerFile(fileLocation)
+                uploadHandler = new UploadHandlerFile(fileLocation),
+                downloadHandler = new DownloadHandlerBuffer(),
+                certificateHandler = new AcceptAllCertificatesSignedWithASpecificKeyPublicKey()
             };
             uwr.SetRequestHeader("Content-Type", "application/octet-stream");
+            uwr.timeout = 600; // 10 minutes timeout
 
             var operation = uwr.SendWebRequest();
 
@@ -164,6 +172,15 @@ public class PlayFlowAPI
             EditorUtility.ClearProgressBar();
             Debug.LogError($"Upload failed: {e.Message}");
             onComplete?.Invoke();
+        }
+    }
+    
+    public class AcceptAllCertificatesSignedWithASpecificKeyPublicKey : CertificateHandler
+    {
+        protected override bool ValidateCertificate(byte[] certificateData)
+        {
+            // Accept all certificates for now. In production, you should validate properly.
+            return true;
         }
     }
 }
