@@ -81,8 +81,14 @@ namespace PlayFlow
             _playerId = playerId;
             _apiKey = apiKey;
             _lobbyConfigName = lobbyConfigName;
-            _baseUrl = baseUrl?.TrimEnd('/') ?? "https://backend.computeflow.cloud";
+            _baseUrl = baseUrl?.TrimEnd('/');
             _debugLogging = debugLogging;
+            
+            if (string.IsNullOrEmpty(_baseUrl))
+            {
+                Debug.LogError("[LobbySseManager] Base URL cannot be null or empty");
+                return;
+            }
             
             if (_debugLogging)
             {

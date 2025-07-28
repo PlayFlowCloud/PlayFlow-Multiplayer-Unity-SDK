@@ -10,7 +10,7 @@ namespace PlayFlow
         public string apiKey;
         
         [Tooltip("The base URL for the PlayFlow backend")]
-        public string baseUrl = "https://backend.computeflow.cloud";
+        public string baseUrl = "https://api.scale.computeflow.cloud";
         
         [Tooltip("The default lobby configuration name")]
         public string defaultLobbyConfig = "Default";

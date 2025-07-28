@@ -16,7 +16,7 @@ namespace PlayFlow
         [Tooltip("Your PlayFlow API key. Get this from your PlayFlow dashboard.")]
         [SerializeField] private string _apiKey;
         [Tooltip("The base URL for the PlayFlow backend")]
-        [SerializeField] private string _baseUrl = "https://backend.computeflow.cloud";
+        [SerializeField] private string _baseUrl = "https://api.scale.computeflow.cloud";
         [Tooltip("The default lobby configuration name")]
         [SerializeField] private string _defaultLobbyConfig = "Default";
         [Header("Network Settings")]
