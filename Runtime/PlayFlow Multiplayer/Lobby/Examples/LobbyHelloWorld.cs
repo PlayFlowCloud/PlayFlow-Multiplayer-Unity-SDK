@@ -13,33 +13,40 @@ using Newtonsoft.Json;
 /// Setup Instructions:
 /// 1. Create an empty GameObject and add the PlayFlowLobbyManagerV2 component to it.
 /// 2. Configure your API key in the PlayFlowLobbyManagerV2 component in the Inspector.
-/// 3. Create another empty GameObject and add this LobbyHelloWorld script to it.
-/// 4. Drag the PlayFlowLobbyManagerV2 GameObject into the 'Lobby Manager' field on this script.
+/// 3. Set the defaultLobbyConfig to "firstLobby" in the inspector
+/// 4. Create another empty GameObject and add this LobbyHelloWorld script to it.
 /// 5. Play the scene and use the keyboard shortcuts below.
 /// 
 /// Keyboard Shortcuts:
 /// - R: Refresh lobby list
-/// - C: Create a new lobby
+/// - C: Create a new lobby (for 1v1 matchmaking)
 /// - J: Join first available public lobby
 /// - L: Leave current lobby
-/// - S: Start the match (host only)
+/// - S: Start the match (host only - direct match)
 /// - E: End the match (host only)
-/// - T: Send test player state update
+/// - T: Send test player state update (with MMR)
 /// - U: Update other player's state (host only)
 /// - I: Get game server connection info
+/// - M: Start 1v1 Matchmaking (host only)
+/// - N: Cancel Matchmaking (host only)
 /// </summary>
 public class LobbyHelloWorld : MonoBehaviour
 {
     [Header("Settings")]
     [Tooltip("The name for lobbies created by this script")]
-    public string lobbyName = "Test Lobby";
+    public string lobbyName = "1v1 Match Lobby";
     
-    [Tooltip("Maximum players for created lobbies")]
+    [Tooltip("Maximum players for created lobbies (set to 2 for 1v1)")]
     [Range(2, 10)]
-    public int maxPlayers = 4;
+    public int maxPlayers = 2;
     
     [Tooltip("Whether created lobbies should be private")]
     public bool isPrivate = false;
+    
+    [Header("Matchmaking Settings")]
+    [Tooltip("Your player's MMR (matchmaking rating) for testing")]
+    [Range(800, 2000)]
+    public int playerMMR = 1200;
 
     private string _playerId;
 
@@ -67,14 +74,19 @@ public class LobbyHelloWorld : MonoBehaviour
     {
         Debug.Log("[LobbyHelloWorld] Manager is ready! Use keyboard shortcuts:");
         Debug.Log("  R - Refresh lobby list");
-        Debug.Log("  C - Create a new lobby");
+        Debug.Log("  C - Create a new lobby (for 1v1 matchmaking)");
         Debug.Log("  J - Join first available lobby");
         Debug.Log("  L - Leave current lobby");
-        Debug.Log("  S - Start the match");
+        Debug.Log("  S - Start the match (direct match)");
         Debug.Log("  E - End the match");
-        Debug.Log("  T - Send test player state");
+        Debug.Log("  T - Send test player state (with MMR)");
         Debug.Log("  U - Update other player's state");
         Debug.Log("  I - Get game server connection info");
+        Debug.Log("  M - Start 1v1 Matchmaking");
+        Debug.Log("  N - Cancel Matchmaking");
+        
+        // Automatically set initial player state with MMR when ready
+        StartCoroutine(SetInitialPlayerState());
     }
     
     void Update()
@@ -134,6 +146,18 @@ public class LobbyHelloWorld : MonoBehaviour
         {
             GetConnectionInfo();
         }
+        
+        // Start 1v1 Matchmaking
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            StartMatchmaking();
+        }
+        
+        // Cancel Matchmaking
+        if (Input.GetKeyDown(KeyCode.N))
+        {
+            CancelMatchmaking();
+        }
     }
     
     void RefreshLobbies()
@@ -156,15 +180,30 @@ public class LobbyHelloWorld : MonoBehaviour
     
     void CreateLobby()
     {
-        Debug.Log($"[LobbyHelloWorld] Creating lobby '{lobbyName}'...");
+        Debug.Log($"[LobbyHelloWorld] Creating 1v1 lobby '{lobbyName}'...");
         
-        PlayFlowLobbyManagerV2.Instance.CreateLobby(lobbyName, maxPlayers, isPrivate,
+        // Create custom settings for the lobby
+        var customSettings = new Dictionary<string, object>
+        {
+            ["gameMode"] = "1v1",
+            ["matchType"] = "ranked"
+        };
+        
+        // Create lobby optimized for 1v1 matchmaking
+        PlayFlowLobbyManagerV2.Instance.CreateLobby(
+            name: lobbyName,
+            maxPlayers: 2, // Always 2 for 1v1
+            isPrivate: isPrivate,
+            allowLateJoin: false, // No late join for competitive 1v1
+            region: "us-west", // You might want to make this configurable
+            customSettings: customSettings,
             onSuccess: (lobby) => {
-                Debug.Log($"[LobbyHelloWorld] Successfully created lobby: {lobby.name} (ID: {lobby.id})");
+                Debug.Log($"[LobbyHelloWorld] Successfully created 1v1 lobby: {lobby.name} (ID: {lobby.id})");
                 if (lobby.isPrivate && !string.IsNullOrEmpty(lobby.inviteCode))
                 {
                     Debug.Log($"[LobbyHelloWorld] Invite code: {lobby.inviteCode}");
                 }
+                Debug.Log("[LobbyHelloWorld] Tip: Press 'M' to start 1v1 matchmaking once you're ready!");
             },
             onError: (error) => {
                 Debug.LogError($"[LobbyHelloWorld] Failed to create lobby: {error}");
@@ -277,10 +316,11 @@ public class LobbyHelloWorld : MonoBehaviour
             ["position"] = new Dictionary<string, float> { ["x"] = 10f, ["y"] = 20f },
             ["health"] = 100,
             ["ready"] = true,
+            ["mmr"] = playerMMR, // Include MMR for matchmaking
             ["timestamp"] = DateTime.UtcNow.ToString()
         };
         
-        Debug.Log("[LobbyHelloWorld] Sending player state update...");
+        Debug.Log($"[LobbyHelloWorld] Sending player state update with MMR: {playerMMR}...");
         
         PlayFlowLobbyManagerV2.Instance.UpdatePlayerState(testState,
             onSuccess: (lobby) => {
@@ -364,6 +404,76 @@ public class LobbyHelloWorld : MonoBehaviour
         );
     }
     
+    void StartMatchmaking()
+    {
+        if (!PlayFlowLobbyManagerV2.Instance.IsInLobby || !PlayFlowLobbyManagerV2.Instance.IsHost)
+        {
+            Debug.LogWarning("[LobbyHelloWorld] Must be host in a lobby to start matchmaking!");
+            return;
+        }
+
+        Debug.Log("[LobbyHelloWorld] Starting 1v1 matchmaking...");
+        
+        PlayFlowLobbyManagerV2.Instance.FindMatch("1VS1",
+            onSuccess: (lobby) => {
+                Debug.Log($"[LobbyHelloWorld] Successfully started matchmaking! Status: {lobby.status}");
+                Debug.Log($"[LobbyHelloWorld] Matchmaking mode: {lobby.matchmakingMode}");
+                Debug.Log($"[LobbyHelloWorld] Ticket ID: {lobby.matchmakingTicketId}");
+            },
+            onError: (error) => {
+                Debug.LogError($"[LobbyHelloWorld] Failed to start matchmaking: {error}");
+            }
+        );
+    }
+    
+    void CancelMatchmaking()
+    {
+        if (!PlayFlowLobbyManagerV2.Instance.IsInLobby || !PlayFlowLobbyManagerV2.Instance.IsHost)
+        {
+            Debug.LogWarning("[LobbyHelloWorld] Must be host in a lobby to cancel matchmaking!");
+            return;
+        }
+
+        Debug.Log("[LobbyHelloWorld] Cancelling matchmaking...");
+        
+        PlayFlowLobbyManagerV2.Instance.CancelMatchmaking(
+            onSuccess: (lobby) => {
+                Debug.Log($"[LobbyHelloWorld] Successfully cancelled matchmaking! Status: {lobby.status}");
+            },
+            onError: (error) => {
+                Debug.LogError($"[LobbyHelloWorld] Failed to cancel matchmaking: {error}");
+            }
+        );
+    }
+    
+    IEnumerator SetInitialPlayerState()
+    {
+        // Wait a frame to ensure everything is initialized
+        yield return null;
+        
+        // Wait until we're in a lobby
+        yield return new WaitUntil(() => PlayFlowLobbyManagerV2.Instance.IsInLobby);
+        
+        // Set initial player state with MMR
+        var initialState = new Dictionary<string, object>
+        {
+            ["mmr"] = playerMMR,
+            ["ready"] = false,
+            ["playerName"] = $"Player_{_playerId.Substring(0, 8)}"
+        };
+        
+        Debug.Log($"[LobbyHelloWorld] Setting initial player state with MMR: {playerMMR}");
+        
+        PlayFlowLobbyManagerV2.Instance.UpdatePlayerState(initialState,
+            onSuccess: (lobby) => {
+                Debug.Log("[LobbyHelloWorld] Initial player state set successfully");
+            },
+            onError: (error) => {
+                Debug.LogError($"[LobbyHelloWorld] Failed to set initial player state: {error}");
+            }
+        );
+    }
+    
     void SubscribeToEvents()
     {
         var events = PlayFlowLobbyManagerV2.Instance.Events;
@@ -378,6 +488,11 @@ public class LobbyHelloWorld : MonoBehaviour
         events.OnMatchStarted.AddListener(OnMatchStarted);
         events.OnMatchEnded.AddListener(OnMatchEnded);
         events.OnMatchRunning.AddListener(OnMatchRunning);
+        
+        // Matchmaking events
+        events.OnMatchmakingStarted.AddListener(OnMatchmakingStarted);
+        events.OnMatchmakingCancelled.AddListener(OnMatchmakingCancelled);
+        events.OnMatchFound.AddListener(OnMatchFound);
         
         // Player events
         events.OnPlayerJoined.AddListener(OnPlayerJoined);
@@ -603,6 +718,29 @@ public class LobbyHelloWorld : MonoBehaviour
         Debug.Log($"[LobbyHelloWorld] EVENT: Match ended in lobby {lobby.name}. Returning to 'waiting' status.");
     }
     
+    void OnMatchmakingStarted(Lobby lobby)
+    {
+        Debug.Log($"[LobbyHelloWorld] EVENT: Matchmaking started! Mode: {lobby.matchmakingMode}, Status: {lobby.status}");
+        Debug.Log($"[LobbyHelloWorld] Looking for opponents with similar MMR...");
+    }
+    
+    void OnMatchmakingCancelled(Lobby lobby)
+    {
+        Debug.Log($"[LobbyHelloWorld] EVENT: Matchmaking cancelled. Status: {lobby.status}");
+    }
+    
+    void OnMatchFound(Lobby lobby)
+    {
+        Debug.Log($"[LobbyHelloWorld] EVENT: Match found! Status: {lobby.status}");
+        Debug.Log($"[LobbyHelloWorld] Game server is being launched...");
+        
+        // Log matchmaking data if available
+        if (lobby.matchmakingData != null)
+        {
+            Debug.Log($"[LobbyHelloWorld] Matchmaking data: {JsonConvert.SerializeObject(lobby.matchmakingData)}");
+        }
+    }
+    
     void OnDestroy()
     {
         // Clean up
@@ -629,6 +767,9 @@ public class LobbyHelloWorld : MonoBehaviour
             events.OnMatchStarted.RemoveAllListeners();
             events.OnMatchEnded.RemoveAllListeners();
             events.OnMatchRunning.RemoveAllListeners();
+            events.OnMatchmakingStarted.RemoveAllListeners();
+            events.OnMatchmakingCancelled.RemoveAllListeners();
+            events.OnMatchFound.RemoveAllListeners();
             events.OnError.RemoveAllListeners();
         }
     }

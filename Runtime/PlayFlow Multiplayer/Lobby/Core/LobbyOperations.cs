@@ -162,6 +162,38 @@ namespace PlayFlow
             if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
             yield return _api.FindLobbyByPlayerId(playerId, onSuccess, onError);
         }
+        
+        public IEnumerator StartMatchmakingCoroutine(string lobbyId, string requesterId, string mode, Action<Lobby> onSuccess, Action<string> onError)
+        {
+            if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
+            
+            var payload = new JObject
+            {
+                ["matchmaking"] = new JObject
+                {
+                    ["action"] = "start",
+                    ["mode"] = mode
+                    // Note: playerData is not sent here - the backend will use each player's state from lobbyStateRealTime
+                }
+            };
+            
+            yield return _api.UpdateLobby(lobbyId, requesterId, payload, onSuccess, onError);
+        }
+        
+        public IEnumerator CancelMatchmakingCoroutine(string lobbyId, string requesterId, Action<Lobby> onSuccess, Action<string> onError)
+        {
+            if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
+            
+            var payload = new JObject
+            {
+                ["matchmaking"] = new JObject
+                {
+                    ["action"] = "cancel"
+                }
+            };
+            
+            yield return _api.UpdateLobby(lobbyId, requesterId, payload, onSuccess, onError);
+        }
     }
 }
  

@@ -252,7 +252,8 @@ namespace PlayFlow
 
         public IEnumerator FindLobbyByPlayerId(string playerId, Action<Lobby> onSuccess, Action<string> onError)
         {
-            var url = $"{_baseUrl}/lobbies/player/{playerId}?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
+            // The backend uses the standard GetLobby endpoint, where the ID can be a lobby ID or a player ID.
+            var url = $"{_baseUrl}/lobbies/{UnityWebRequest.EscapeURL(playerId)}?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
 
             Action<string> customErrorHandler = (error) =>
             {

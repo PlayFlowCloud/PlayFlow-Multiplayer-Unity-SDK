@@ -26,6 +26,12 @@ namespace PlayFlow
         public Dictionary<string, object> gameServer;
         public Dictionary<string, Dictionary<string, object>> lobbyStateRealTime;
         
+        // Matchmaking fields
+        public string matchmakingMode;
+        public string matchmakingStartedAt;
+        public string matchmakingTicketId;
+        public Dictionary<string, object> matchmakingData;
+        
         // Helper method to convert region to a display-friendly string
         public string GetRegionDisplayName()
         {

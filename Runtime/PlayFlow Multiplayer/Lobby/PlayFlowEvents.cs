@@ -50,6 +50,19 @@ namespace PlayFlow
         [Tooltip("Fired when the match has ended")]
         public LobbyEvent OnMatchEnded = new LobbyEvent();
         
+        [Header("Matchmaking Events")]
+        [Tooltip("Fired when matchmaking queue is started")]
+        public LobbyEvent OnMatchmakingStarted = new LobbyEvent();
+        
+        [Tooltip("Fired when a match is found through matchmaking")]
+        public LobbyEvent OnMatchFound = new LobbyEvent();
+        
+        [Tooltip("Fired when matchmaking is cancelled")]
+        public LobbyEvent OnMatchmakingCancelled = new LobbyEvent();
+        
+        [Tooltip("Fired when matchmaking times out")]
+        public LobbyEvent OnMatchmakingTimeout = new LobbyEvent();
+        
         [Header("Player Events")]
         [Tooltip("Fired when a player joins the lobby")]
         public PlayerEvent OnPlayerJoined = new PlayerEvent();
@@ -108,6 +121,26 @@ namespace PlayFlow
         public void InvokeMatchEnded(Lobby lobby)
         {
             SafeInvoke(() => OnMatchEnded?.Invoke(lobby), "MatchEnded", lobby);
+        }
+        
+        public void InvokeMatchmakingStarted(Lobby lobby)
+        {
+            SafeInvoke(() => OnMatchmakingStarted?.Invoke(lobby), "MatchmakingStarted", lobby);
+        }
+        
+        public void InvokeMatchFound(Lobby lobby)
+        {
+            SafeInvoke(() => OnMatchFound?.Invoke(lobby), "MatchFound", lobby);
+        }
+        
+        public void InvokeMatchmakingCancelled(Lobby lobby)
+        {
+            SafeInvoke(() => OnMatchmakingCancelled?.Invoke(lobby), "MatchmakingCancelled", lobby);
+        }
+        
+        public void InvokeMatchmakingTimeout(Lobby lobby)
+        {
+            SafeInvoke(() => OnMatchmakingTimeout?.Invoke(lobby), "MatchmakingTimeout", lobby);
         }
         
         public void InvokePlayerJoined(PlayerAction action)

@@ -251,6 +251,37 @@ namespace PlayFlow
             }, onError));
         }
         
+        public void FindMatch(string mode, Action<Lobby> onSuccess = null, Action<string> onError = null)
+        {
+            if (!ValidateOperation("find match", onError)) return;
+            if (!IsHost) { onError?.Invoke("Only the host can start matchmaking."); return; }
+            if (string.IsNullOrEmpty(mode)) { onError?.Invoke("Matchmaking mode is required."); return; }
+            if (CurrentLobby?.status != "waiting") { onError?.Invoke("Can only start matchmaking when lobby is in 'waiting' status."); return; }
+            
+            var lobbyId = CurrentLobby.id;
+            StartCoroutine(_operations.StartMatchmakingCoroutine(lobbyId, PlayerId, mode, lobby => {
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
+                UpdateCurrentLobby(lobby);
+                _events.InvokeMatchmakingStarted(lobby);
+                onSuccess?.Invoke(lobby);
+            }, onError));
+        }
+        
+        public void CancelMatchmaking(Action<Lobby> onSuccess = null, Action<string> onError = null)
+        {
+            if (!ValidateOperation("cancel matchmaking", onError)) return;
+            if (!IsHost) { onError?.Invoke("Only the host can cancel matchmaking."); return; }
+            if (CurrentLobby?.status != "in_queue") { onError?.Invoke("Lobby is not currently in matchmaking queue."); return; }
+            
+            var lobbyId = CurrentLobby.id;
+            StartCoroutine(_operations.CancelMatchmakingCoroutine(lobbyId, PlayerId, lobby => {
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
+                UpdateCurrentLobby(lobby);
+                _events.InvokeMatchmakingCancelled(lobby);
+                onSuccess?.Invoke(lobby);
+            }, onError));
+        }
+        
         public void RefreshCurrentLobby(Action<Lobby> onSuccess = null, Action<string> onError = null)
         {
             if (!ValidateOperation("refresh lobby", onError)) return;
@@ -318,18 +349,38 @@ namespace PlayFlow
             if (lobby == null) return;
             CheckForPlayerChanges(lobby);
             _events.InvokeLobbyUpdated(lobby);
-            if (lobby.status == "in_game" && !_hasFiredMatchRunningEvent)
+            
+            // Handle status-specific events
+            switch (lobby.status)
             {
-                var connectionInfo = GetGameServerConnectionInfo();
-                if (connectionInfo.HasValue)
-                {
-                    _events.InvokeMatchRunning(connectionInfo.Value);
-                    _hasFiredMatchRunningEvent = true;
-                }
-            }
-            else if (lobby.status != "in_game")
-            {
-                _hasFiredMatchRunningEvent = false;
+                case "in_game":
+                    if (!_hasFiredMatchRunningEvent)
+                    {
+                        var connectionInfo = GetGameServerConnectionInfo();
+                        if (connectionInfo.HasValue)
+                        {
+                            _events.InvokeMatchRunning(connectionInfo.Value);
+                            _hasFiredMatchRunningEvent = true;
+                        }
+                    }
+                    break;
+                    
+                case "match_found":
+                    // Fire match found event when transitioning to match_found status
+                    if (_currentLobby?.status == "in_queue")
+                    {
+                        _events.InvokeMatchFound(lobby);
+                    }
+                    break;
+                    
+                case "waiting":
+                    // Reset the match running flag when returning to waiting
+                    _hasFiredMatchRunningEvent = false;
+                    break;
+                    
+                case "in_queue":
+                    // Already handled by FindMatch method
+                    break;
             }
         }
         
