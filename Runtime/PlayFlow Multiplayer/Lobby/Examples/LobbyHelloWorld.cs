@@ -317,6 +317,7 @@ public class LobbyHelloWorld : MonoBehaviour
             ["health"] = 100,
             ["ready"] = true,
             ["mmr"] = playerMMR, // Include MMR for matchmaking
+            ["regions"] = new List<string> { "eu-west", "eu-north" },
             ["timestamp"] = DateTime.UtcNow.ToString()
         };
         
