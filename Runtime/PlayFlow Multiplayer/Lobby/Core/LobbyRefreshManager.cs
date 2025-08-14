@@ -149,8 +149,15 @@ namespace PlayFlow
                 {
                     if (_lobbyManager != null && _lobbyManager.CurrentLobby?.id == lobby.id)
                     {
-                        // Mark this as a local update to potentially deduplicate SSE
-                        _deduplicator.IsDuplicateUpdate(lobby); // Pre-record it
+                        // Check for duplicate updates from polling vs local API calls
+                        if (_deduplicator.IsDuplicateUpdate(lobby))
+                        {
+                            if (_settings.debugLogging)
+                            {
+                                Debug.Log($"[LobbyRefreshManager] Skipping duplicate polled update for lobby {lobby.id}");
+                            }
+                            return;
+                        }
                         _lobbyManager.UpdateCurrentLobby(lobby);
                     }
                 },
