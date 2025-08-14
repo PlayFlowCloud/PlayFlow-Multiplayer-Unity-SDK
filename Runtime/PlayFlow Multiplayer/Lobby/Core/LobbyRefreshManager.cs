@@ -165,15 +165,16 @@ namespace PlayFlow
                 {
                     if (error.Contains("404") || error.Contains("Not Found"))
                     {
-                        // Lobby no longer exists, clear it
-                        if (_lobbyManager != null)
+                        // Lobby no longer exists. Only clear the state if we haven't already
+                        // moved on to a different lobby in the meantime.
+                        if (_lobbyManager != null && _lobbyManager.CurrentLobby?.id == lobbyId)
                         {
                             _lobbyManager.ClearCurrentLobby();
                         }
                         
                         if (_settings.debugLogging)
                         {
-                            Debug.Log($"[LobbyRefreshManager] Lobby {lobbyId} no longer exists");
+                            Debug.Log($"[LobbyRefreshManager] A poll for lobby {lobbyId} failed because it no longer exists (404).");
                         }
                     }
                     else if (_settings.debugLogging)
