@@ -501,21 +501,12 @@ namespace PlayFlow
 
         public ConnectionInfo? GetGameServerConnectionInfo()
         {
-            if (CurrentLobby?.status != "in_game" || CurrentLobby.gameServer == null) return null;
-            try
+            if (CurrentLobby?.status != "in_game") return null;
+            if (CurrentLobby.gameServer == null || !CurrentLobby.gameServer.ContainsKey("status") || CurrentLobby.gameServer["status"]?.ToString() != "running")
             {
-                var gameServerJson = JObject.FromObject(CurrentLobby.gameServer);
-                if (gameServerJson["status"]?.ToString() != "running") return null;
-                var networkPorts = gameServerJson["network_ports"] as JArray;
-                if (networkPorts == null || networkPorts.Count == 0) return null;
-                var gamePort = networkPorts.FirstOrDefault(p => p["protocol"]?.ToString() == "udp") ?? networkPorts.First();
-                return new ConnectionInfo { Ip = gamePort["host"]?.ToString(), Port = gamePort["external_port"]?.ToObject<int>() ?? 0 };
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[PlayFlowLobbyManager] Error parsing game server info: {e.Message}");
                 return null;
             }
+            return Lobby.GetPrimaryConnectionInfo(CurrentLobby);
         }
     }
 }

@@ -324,40 +324,11 @@ namespace PlayFlow
                     return;
                 }
                 
-                // Check if this is a server status update from launching to running
-                bool wasLaunching = false;
-                if (_lobbyManager.CurrentLobby?.gameServer != null && lobby.gameServer != null)
-                {
-                    var oldStatus = _lobbyManager.CurrentLobby.gameServer.ContainsKey("status") ? 
-                        _lobbyManager.CurrentLobby.gameServer["status"]?.ToString() : "";
-                    var newStatus = lobby.gameServer.ContainsKey("status") ? 
-                        lobby.gameServer["status"]?.ToString() : "";
-                    
-                    if (oldStatus == "launching" && newStatus == "running")
-                    {
-                        wasLaunching = true;
-                        if (_settings?.debugLogging ?? false)
-                        {
-                            Debug.Log($"[LobbyRefreshManager] SSE delivered server running status");
-                        }
-                    }
-                }
-                
                 _lobbyManager.UpdateCurrentLobby(lobby);
                 
                 if (_settings?.debugLogging ?? false)
                 {
                     Debug.Log($"[LobbyRefreshManager] Received SSE update for lobby {lobby.id} - Status: {lobby.status}");
-                }
-                
-                // Fire match running event if server just became ready
-                if (wasLaunching && _events != null)
-                {
-                    if (_settings?.debugLogging ?? false)
-                    {
-                        Debug.Log($"[LobbyRefreshManager] ✅ Game server is now running! (via SSE)");
-                    }
-                    _events.InvokeMatchRunning(ExtractConnectionInfo(lobby));
                 }
             }
         }
@@ -384,35 +355,7 @@ namespace PlayFlow
         
         private ConnectionInfo ExtractConnectionInfo(Lobby lobby)
         {
-            if (lobby?.gameServer == null) return new ConnectionInfo();
-            
-            var gameServer = lobby.gameServer;
-            
-            // Try to extract connection info from network_ports array first (PlayFlow format)
-            if (gameServer.ContainsKey("network_ports") && gameServer["network_ports"] is Newtonsoft.Json.Linq.JArray ports)
-            {
-                foreach (var port in ports)
-                {
-                    // Look for the main game port (usually UDP 7770 or similar)
-                    if (port["protocol"]?.ToString() == "udp" && port["internal_port"]?.ToString() == "7770")
-                    {
-                        string host = port["host"]?.ToString() ?? "";
-                        int externalPort = port["external_port"] != null ? Convert.ToInt32(port["external_port"]) : 0;
-                        
-                        if (_settings?.debugLogging ?? false)
-                        {
-                            Debug.Log($"[LobbyRefreshManager] Extracted connection info: {host}:{externalPort}");
-                        }
-                        return new ConnectionInfo { Ip = host, Port = externalPort };
-                    }
-                }
-            }
-            
-            // Fallback to simple ip/port fields
-            string ip = gameServer.ContainsKey("ip") ? gameServer["ip"].ToString() : "";
-            int portNum = gameServer.ContainsKey("port") ? Convert.ToInt32(gameServer["port"]) : 0;
-            
-            return new ConnectionInfo { Ip = ip, Port = portNum };
+            return Lobby.GetPrimaryConnectionInfo(lobby) ?? new ConnectionInfo();
         }
         
         private void OnDestroy()
