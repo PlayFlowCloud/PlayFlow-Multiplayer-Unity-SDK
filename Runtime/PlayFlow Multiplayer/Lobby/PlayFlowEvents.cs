@@ -1,9 +1,20 @@
 using UnityEngine;
 using UnityEngine.Events;
 using System;
+using System.Collections.Generic;
 
 namespace PlayFlow
 {
+    [System.Serializable]
+    public struct PortMappingInfo
+    {
+        public string Name;
+        public string Protocol;
+        public string Host;
+        public int InternalPort;
+        public int ExternalPort;
+    }
+
     [System.Serializable]
     public class PlayerEvent : UnityEvent<PlayerAction> { }
     
@@ -15,6 +26,9 @@ namespace PlayFlow
     
     [System.Serializable]
     public class ConnectionInfoEvent : UnityEvent<ConnectionInfo> { }
+
+    [System.Serializable]
+    public class PortMappingInfoListEvent : UnityEvent<List<PortMappingInfo>> { }
     
     [System.Serializable]
     public class StateChangedEvent : UnityEvent<LobbyState, LobbyState> { }
@@ -46,6 +60,9 @@ namespace PlayFlow
         
         [Tooltip("Fired when the match is running")]
         public ConnectionInfoEvent OnMatchRunning = new ConnectionInfoEvent();
+
+        [Tooltip("Fired when the match is running and provides a full list of all server ports.")]
+        public PortMappingInfoListEvent OnMatchServerDetailsReady = new PortMappingInfoListEvent();
         
         [Tooltip("Fired when the match has ended")]
         public LobbyEvent OnMatchEnded = new LobbyEvent();
@@ -116,6 +133,11 @@ namespace PlayFlow
         public void InvokeMatchRunning(ConnectionInfo info)
         {
             SafeInvoke(() => OnMatchRunning?.Invoke(info), "MatchRunning", info);
+        }
+
+        public void InvokeMatchServerDetailsReady(List<PortMappingInfo> portMappings)
+        {
+            SafeInvoke(() => OnMatchServerDetailsReady?.Invoke(portMappings), "MatchServerDetailsReady", portMappings);
         }
         
         public void InvokeMatchEnded(Lobby lobby)

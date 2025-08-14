@@ -489,6 +489,7 @@ public class LobbyHelloWorld : MonoBehaviour
         events.OnMatchStarted.AddListener(OnMatchStarted);
         events.OnMatchEnded.AddListener(OnMatchEnded);
         events.OnMatchRunning.AddListener(OnMatchRunning);
+        events.OnMatchServerDetailsReady.AddListener(OnMatchServerDetailsReady);
         
         // Matchmaking events
         events.OnMatchmakingStarted.AddListener(OnMatchmakingStarted);
@@ -713,6 +714,22 @@ public class LobbyHelloWorld : MonoBehaviour
         Debug.Log($"[LobbyHelloWorld] EVENT: Server is ready! IP: {connectionInfo.Ip}, Port: {connectionInfo.Port}");
         // Here you would connect your game client using the connectionInfo details.
     }
+
+    void OnMatchServerDetailsReady(List<PortMappingInfo> portMappings)
+    {
+        Debug.Log("[LobbyHelloWorld] EVENT: Full server details are ready.");
+        foreach (var portInfo in portMappings)
+        {
+            Debug.Log($"  - Port '{portInfo.Name}': {portInfo.Host}:{portInfo.ExternalPort} (internal: {portInfo.InternalPort}, protocol: {portInfo.Protocol})");
+        }
+
+        // Example: Find the specific port for your game (e.g., the one mapped from internal port 7770)
+        if (PlayFlowLobbyManagerV2.Instance.CurrentLobby.TryGetPortMapping(7770, out var gamePort))
+        {
+            Debug.Log($"[LobbyHelloWorld] Found our specific game port '{gamePort.Name}' running on {gamePort.Host}:{gamePort.ExternalPort}");
+            // Connect your game client using gamePort.Host and gamePort.ExternalPort
+        }
+    }
     
     void OnMatchEnded(Lobby lobby)
     {
@@ -768,6 +785,7 @@ public class LobbyHelloWorld : MonoBehaviour
             events.OnMatchStarted.RemoveAllListeners();
             events.OnMatchEnded.RemoveAllListeners();
             events.OnMatchRunning.RemoveAllListeners();
+            events.OnMatchServerDetailsReady.RemoveAllListeners();
             events.OnMatchmakingStarted.RemoveAllListeners();
             events.OnMatchmakingCancelled.RemoveAllListeners();
             events.OnMatchFound.RemoveAllListeners();

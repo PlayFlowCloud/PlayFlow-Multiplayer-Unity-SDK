@@ -366,6 +366,7 @@ namespace PlayFlow
                         if (connectionInfo.HasValue)
                         {
                             _events.InvokeMatchRunning(connectionInfo.Value);
+                            _events.InvokeMatchServerDetailsReady(CurrentLobby.GetPortMappings());
                             _hasFiredMatchRunningEvent = true;
                         }
                     }

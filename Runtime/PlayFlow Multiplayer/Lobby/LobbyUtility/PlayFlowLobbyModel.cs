@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using System;
+using Newtonsoft.Json.Linq;
 
 namespace PlayFlow
 {
@@ -65,6 +66,42 @@ namespace PlayFlow
         {
             var json = JsonConvert.SerializeObject(this);
             return JsonConvert.DeserializeObject<Lobby>(json);
+        }
+
+        public List<PortMappingInfo> GetPortMappings()
+        {
+            var mappings = new List<PortMappingInfo>();
+            if (gameServer == null || !gameServer.ContainsKey("network_ports") || !(gameServer["network_ports"] is JArray ports))
+            {
+                return mappings;
+            }
+
+            foreach (var portToken in ports)
+            {
+                mappings.Add(new PortMappingInfo
+                {
+                    Name = portToken["name"]?.ToString() ?? "",
+                    Protocol = portToken["protocol"]?.ToString() ?? "",
+                    Host = portToken["host"]?.ToString() ?? "",
+                    InternalPort = portToken["internal_port"]?.ToObject<int>() ?? 0,
+                    ExternalPort = portToken["external_port"]?.ToObject<int>() ?? 0
+                });
+            }
+            return mappings;
+        }
+
+        public bool TryGetPortMapping(int internalPort, out PortMappingInfo portMapping)
+        {
+            foreach (var mapping in GetPortMappings())
+            {
+                if (mapping.InternalPort == internalPort)
+                {
+                    portMapping = mapping;
+                    return true;
+                }
+            }
+            portMapping = default;
+            return false;
         }
         
         public override string ToString()
