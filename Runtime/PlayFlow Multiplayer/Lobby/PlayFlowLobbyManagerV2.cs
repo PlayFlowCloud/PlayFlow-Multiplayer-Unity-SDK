@@ -63,9 +63,9 @@ namespace PlayFlow
         public List<Lobby> AvailableLobbies { get; private set; } = new List<Lobby>();
         
         // --- Helpers ---
-        public bool IsInLobby => State == LobbyState.InLobby;
+        public bool IsInLobby => State == LobbyState.InLobby && _currentLobby != null;
         public string CurrentLobbyId => CurrentLobby?.id;
-        public bool IsHost => IsInLobby && CurrentLobby?.host == PlayerId;
+        public bool IsHost => _currentLobby != null && _currentLobby.host == PlayerId;
         public string InviteCode => CurrentLobby?.inviteCode;
         
         // --- Settings access ---
@@ -328,9 +328,14 @@ namespace PlayFlow
 
         internal void SetCurrentLobby(Lobby lobby)
         {
-            var wasInLobby = _currentLobby != null;
             _currentLobby = lobby;
-            if (!wasInLobby) { ChangeState(LobbyState.InLobby); }
+            
+            // If we have a valid lobby and we're not already in the InLobby state, fix it
+            if (lobby != null && State != LobbyState.InLobby)
+            {
+                ChangeState(LobbyState.InLobby);
+            }
+            
             ProcessLobbyUpdate(lobby);
         }
 
