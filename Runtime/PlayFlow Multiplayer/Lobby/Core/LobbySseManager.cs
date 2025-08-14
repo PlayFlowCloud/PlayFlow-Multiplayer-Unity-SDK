@@ -153,13 +153,6 @@ namespace PlayFlow
             _shouldReconnect = false;
             _currentLobbyId = null;
             StopConnectionCoroutines(true);
-            
-            // Stop periodic retry when disconnecting
-            if (_periodicRetryCoroutine != null)
-            {
-                StopCoroutine(_periodicRetryCoroutine);
-                _periodicRetryCoroutine = null;
-            }
         }
 
         /// <summary>
@@ -213,6 +206,14 @@ namespace PlayFlow
                 StopCoroutine(_reconnectCoroutine);
                 _reconnectCoroutine = null;
             }
+
+            if (_periodicRetryCoroutine != null)
+            {
+                StopCoroutine(_periodicRetryCoroutine);
+                _periodicRetryCoroutine = null;
+            }
+
+            _isConnecting = false;
             
             if (IsConnected)
             {

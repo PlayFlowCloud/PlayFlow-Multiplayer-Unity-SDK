@@ -50,6 +50,7 @@ namespace PlayFlow
             if (_lobbyManager != null)
             {
                 _lobbyManager.Events.OnLobbyUpdated.AddListener(HandleSessionLobbyChanged);
+                _lobbyManager.Events.OnLobbyLeft.AddListener(HandleSessionLobbyLeft);
             }
             
             // Start the refresh loop here, after settings are assigned
@@ -275,6 +276,13 @@ namespace PlayFlow
                 }
             }
         }
+
+
+        private void HandleSessionLobbyLeft()
+        {
+            // When we leave a lobby, treat it as a session change to null to trigger SSE disconnect
+            HandleSessionLobbyChanged(null);
+        }
         
         private void HandleSSEConnected()
         {
@@ -423,6 +431,7 @@ namespace PlayFlow
             if (_lobbyManager != null)
             {
                 _lobbyManager.Events.OnLobbyUpdated.RemoveListener(HandleSessionLobbyChanged);
+                _lobbyManager.Events.OnLobbyLeft.RemoveListener(HandleSessionLobbyLeft);
             }
         }
     }
