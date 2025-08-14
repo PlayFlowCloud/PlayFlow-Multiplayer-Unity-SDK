@@ -141,6 +141,8 @@ namespace PlayFlow
         {
             if (!ValidateOperation("create lobby", onError)) return;
             StartCoroutine(_operations.CreateLobbyCoroutine(name, maxPlayers, isPrivate, allowLateJoin, region, customSettings, PlayerId, lobby => {
+                // Mark this update before setting to prevent race condition with refresh
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 SetCurrentLobby(lobby);
                 _events.InvokeLobbyCreated(lobby);
                 onSuccess?.Invoke(lobby);
@@ -157,6 +159,8 @@ namespace PlayFlow
             if (!ValidateOperation("join lobby", onError)) return;
             if (string.IsNullOrEmpty(lobbyId)) { onError?.Invoke("Lobby ID cannot be empty"); return; }
             StartCoroutine(_operations.JoinLobbyCoroutine(lobbyId, PlayerId, lobby => {
+                // Mark this update before setting to prevent race condition with refresh
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 SetCurrentLobby(lobby);
                 _events.InvokeLobbyJoined(lobby);
                 onSuccess?.Invoke(lobby);
@@ -168,6 +172,8 @@ namespace PlayFlow
             if (!ValidateOperation("join lobby by code", onError)) return;
             if (string.IsNullOrEmpty(inviteCode)) { onError?.Invoke("Invite Code cannot be empty"); return; }
             StartCoroutine(_operations.JoinLobbyByCodeCoroutine(inviteCode, PlayerId, lobby => {
+                // Mark this update before setting to prevent race condition with refresh
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 SetCurrentLobby(lobby);
                 _events.InvokeLobbyJoined(lobby);
                 onSuccess?.Invoke(lobby);
@@ -431,6 +437,7 @@ namespace PlayFlow
             if (!IsHost) { onError?.Invoke("Only the host can transfer ownership."); return; }
             if (newHostId == PlayerId) { onError?.Invoke("Cannot transfer host to yourself."); return; }
             StartCoroutine(_operations.TransferHostCoroutine(CurrentLobbyId, PlayerId, newHostId, lobby => {
+                if (_refreshManager != null) _refreshManager.MarkLocalUpdate(lobby);
                 UpdateCurrentLobby(lobby);
                 onSuccess?.Invoke(lobby);
             }, onError));
