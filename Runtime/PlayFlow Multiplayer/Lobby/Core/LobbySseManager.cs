@@ -252,10 +252,22 @@ namespace PlayFlow
                 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    string error = $"SSE connection failed: {request.error} (HTTP {request.responseCode})";
-                    Debug.LogError($"[LobbySseManager] {error}");
-                    OnError?.Invoke(error);
+                    // Unity can report "Unknown Error" with HTTP 200 on a clean SSE stream closure.
+                    // We should handle this gracefully and not treat it as a critical error.
+                    bool isCleanClosure = request.responseCode == 200 && request.error == "Unknown Error";
+
+                    if (!isCleanClosure)
+                    {
+                        string error = $"SSE connection failed: {request.error} (HTTP {request.responseCode})";
+                        Debug.LogError($"[LobbySseManager] {error}");
+                        OnError?.Invoke(error);
+                    }
+                    else if (_debugLogging)
+                    {
+                        Debug.Log("[LobbySseManager] SSE stream closed by the server (HTTP 200). This is usually normal.");
+                    }
                     
+                    // In either case, attempt to reconnect if we are supposed to.
                     if (_shouldReconnect && _reconnectCoroutine == null && !_isPaused)
                     {
                         _reconnectCoroutine = StartCoroutine(ReconnectCoroutine());
