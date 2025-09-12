@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -18,6 +19,7 @@ namespace PlayFlow.SDK.Editor
     private Button pricingButton;
     private Button getTokenButton;
     private Button uploadButton;
+    private Button directUploadButton;
     private Button uploadStatusButton;
     private Button ButtonLaunchSimplified;
 
@@ -85,6 +87,7 @@ namespace PlayFlow.SDK.Editor
         pricingButton = rootVisualElement.Q<Button>("ButtonPricing");
         getTokenButton = rootVisualElement.Q<Button>("ButtonGetToken");
         uploadButton = rootVisualElement.Q<Button>("ButtonUpload");
+        directUploadButton = rootVisualElement.Q<Button>("ButtonDirectUpload");
         uploadStatusButton = rootVisualElement.Q<Button>("ButtonUploadStatus");
         QuickStart =  rootVisualElement.Q<Button>("QuickStart");
         ButtonLaunchSimplified = rootVisualElement.Q<Button>("ButtonLaunchSimplified");
@@ -120,6 +123,7 @@ namespace PlayFlow.SDK.Editor
         ButtonLaunchSimplified.clicked += OnLaunchSimplifiedPressed;
 
         uploadButton.clicked += OnUploadPressed;
+        directUploadButton.clicked += OnDirectUploadPressed;
         uploadStatusButton.clicked += OnUploadStatusPressed;
         buildSettingsToggle.RegisterValueChangedCallback(HandleBuildSettings);
     }
@@ -359,6 +363,55 @@ namespace PlayFlow.SDK.Editor
             outputLogs($"Upload process failed: {e.Message}", true);
             // Ensure UI is re-enabled even if the pre-upload steps fail
             uploadButton.SetEnabled(true);
+            hideProgress();
+            EditorUtility.ClearProgressBar();
+        }
+    }
+
+    private void OnDirectUploadPressed()
+    {
+        if (servertag.value == null || servertag.value.Equals(""))
+        {
+            outputLogs("Server tag cannot be empty. Please enter a server tag or use `default` as the server tag", true);
+            return;
+        }
+
+        string zipPath = EditorUtility.OpenFilePanel("Select Server Build Zip", "", "zip");
+        if (string.IsNullOrEmpty(zipPath))
+        {
+            return; // User cancelled
+        }
+
+        if (!File.Exists(zipPath))
+        {
+            outputLogs("Selected file does not exist.", true);
+            return;
+        }
+
+        try
+        {
+            directUploadButton.SetEnabled(false);
+            showProgress(25);
+            outputLogs($"Starting direct upload of: {Path.GetFileName(zipPath)}");
+
+            Action onUploadComplete = () =>
+            {
+                directUploadButton.SetEnabled(true);
+                hideProgress();
+            };
+
+            Action<float> onUploadProgress = (uploadProgress) =>
+            {
+                float mappedProgress = 25 + (uploadProgress * 75);
+                showProgress(mappedProgress);
+            };
+
+            PlayFlowAPI.Upload(zipPath, tokenField.value, servertag.value, onUploadComplete, onUploadProgress);
+        }
+        catch (Exception e)
+        {
+            outputLogs($"Direct upload failed: {e.Message}", true);
+            directUploadButton.SetEnabled(true);
             hideProgress();
             EditorUtility.ClearProgressBar();
         }

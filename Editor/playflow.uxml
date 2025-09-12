@@ -36,11 +36,15 @@
             <ui:DropdownField label="Server Scene" index="-1" choices="System.Collections.Generic.List`1[System.String]" name="sceneDropDown" view-data-key="sceneDropDown" />
             <ui:TextField picking-mode="Ignore" label="Build Version" name="servertag" view-data-key="servertag" password="false" value="default" />
             <ui:GroupBox style="align-items: center; justify-content: space-around; flex-direction: row; width: auto; margin-left: 0;">
-                <ui:Button name="ButtonUpload" class="button-with-icon" style="width: 49%; flex-direction: row-reverse;">
+                <ui:Button name="ButtonUpload" class="button-with-icon" style="width: 32%; flex-direction: row-reverse;">
                     <ui:Label text="Upload Server" class="button-label" />
                     <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/cloud-upload-icon&apos;);" />
                 </ui:Button>
-                <ui:Button name="ButtonUploadStatus" class="button-with-icon" style="width: 49%; flex-direction: row-reverse;">
+                <ui:Button name="ButtonDirectUpload" class="button-with-icon" style="width: 32%; flex-direction: row-reverse;">
+                    <ui:Label text="Direct Upload" class="button-label" />
+                    <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/cloud-upload-icon&apos;);" />
+                </ui:Button>
+                <ui:Button name="ButtonUploadStatus" class="button-with-icon" style="width: 32%; flex-direction: row-reverse;">
                     <ui:Label text="View Builds" class="button-label" />
                     <ui:VisualElement class="button-icon" style="background-image: resource(&apos;PlayFlowIcons/sync&apos;);" />
                 </ui:Button>
