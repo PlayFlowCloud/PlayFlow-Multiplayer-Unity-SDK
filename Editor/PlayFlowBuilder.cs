@@ -112,6 +112,27 @@ public class PlayFlowBuilder
     {
         FastZip fz = new FastZip();
         fz.CompressionLevel = Deflater.CompressionLevel.DEFAULT_COMPRESSION;
+        
+        // Set up file filter to exclude IL2CPP backup folders
+        fz.FileFilter = new FileFilter(name => {
+            string fileName = Path.GetFileName(name);
+            string dirName = Path.GetDirectoryName(name);
+            
+            // Skip _BackUpThisFolder_ButDontShipItWithYourGame folders and their contents
+            if (dirName != null && dirName.Contains("_BackUpThisFolder_ButDontShipItWithYourGame"))
+            {
+                return false;
+            }
+            
+            // Also skip if the current item itself is the backup folder
+            if (fileName != null && fileName.Contains("_BackUpThisFolder_ButDontShipItWithYourGame"))
+            {
+                return false;
+            }
+            
+            return true;
+        });
+        
         fz.CreateZip(zipFilePath, sourceDir, withSubdirs, pattern);
         return zipFilePath;
     }
