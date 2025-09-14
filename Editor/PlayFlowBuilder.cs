@@ -110,31 +110,56 @@ public class PlayFlowBuilder
 
     public static string ZipPath(string zipFilePath, string sourceDir, string pattern, bool withSubdirs, string password)
     {
-        FastZip fz = new FastZip();
-        fz.CompressionLevel = Deflater.CompressionLevel.DEFAULT_COMPRESSION;
+        // Create zip manually to have control over what gets included
+        using (var fileStream = new FileStream(zipFilePath, FileMode.Create))
+        using (var zipStream = new ZipOutputStream(fileStream))
+        {
+            zipStream.SetLevel(6); // Compression level
+            
+            AddDirectoryToZip(zipStream, sourceDir, "");
+        }
         
-        // Set up file filter to exclude IL2CPP backup folders
-        fz.FileFilter = new FileFilter(name => {
-            string fileName = Path.GetFileName(name);
-            string dirName = Path.GetDirectoryName(name);
-            
-            // Skip _BackUpThisFolder_ButDontShipItWithYourGame folders and their contents
-            if (dirName != null && dirName.Contains("_BackUpThisFolder_ButDontShipItWithYourGame"))
-            {
-                return false;
-            }
-            
-            // Also skip if the current item itself is the backup folder
-            if (fileName != null && fileName.Contains("_BackUpThisFolder_ButDontShipItWithYourGame"))
-            {
-                return false;
-            }
-            
-            return true;
-        });
-        
-        fz.CreateZip(zipFilePath, sourceDir, withSubdirs, pattern);
         return zipFilePath;
+    }
+    
+    private static void AddDirectoryToZip(ZipOutputStream zipStream, string sourcePath, string entryPath)
+    {
+        string[] files = Directory.GetFiles(sourcePath);
+        
+        // Add files
+        foreach (string file in files)
+        {
+            string fileName = Path.GetFileName(file);
+            string zipEntryName = string.IsNullOrEmpty(entryPath) ? fileName : entryPath + "/" + fileName;
+            
+            var entry = new ZipEntry(zipEntryName);
+            entry.DateTime = File.GetLastWriteTime(file);
+            zipStream.PutNextEntry(entry);
+            
+            using (var fileStream = new FileStream(file, FileMode.Open, FileAccess.Read))
+            {
+                fileStream.CopyTo(zipStream);
+            }
+            
+            zipStream.CloseEntry();
+        }
+        
+        // Add directories recursively, but skip Unity backup folders
+        string[] directories = Directory.GetDirectories(sourcePath);
+        foreach (string directory in directories)
+        {
+            string dirName = Path.GetFileName(directory);
+            
+            // Skip Unity folders that contain DoNotShip or BackUpThisFolder patterns
+            if (dirName.Contains("_DoNotShip") || dirName.Contains("_BackUpThisFolder_ButDontShipItWithYourGame"))
+            {
+                Debug.Log($"Skipping Unity backup/debug folder: {dirName}");
+                continue;
+            }
+            
+            string zipEntryName = string.IsNullOrEmpty(entryPath) ? dirName : entryPath + "/" + dirName;
+            AddDirectoryToZip(zipStream, directory, zipEntryName);
+        }
     }
 
     public static void cleanUp(string zipFilePath)
