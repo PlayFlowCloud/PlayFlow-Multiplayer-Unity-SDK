@@ -16,7 +16,12 @@
 *.userprefs
 *.env
 
+# Keep release scripts local only
 tag-release.sh
+tag-release.bat
+
+# Keep release notes local only
+release-notes/
 
 # Ignore OS-specific files
 .DS_Store
