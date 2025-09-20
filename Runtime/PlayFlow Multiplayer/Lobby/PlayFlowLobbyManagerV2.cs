@@ -328,22 +328,26 @@ namespace PlayFlow
 
         internal void SetCurrentLobby(Lobby lobby)
         {
+            // Capture old status before updating
+            string oldStatus = _currentLobby?.status;
             _currentLobby = lobby;
-            
+
             // If we have a valid lobby and we're not already in the InLobby state, fix it
             if (lobby != null && State != LobbyState.InLobby)
             {
                 ChangeState(LobbyState.InLobby);
             }
-            
-            ProcessLobbyUpdate(lobby);
+
+            ProcessLobbyUpdate(lobby, oldStatus);
         }
 
         internal void UpdateCurrentLobby(Lobby newLobby)
         {
             if (newLobby == null || _currentLobby == null || newLobby.id != _currentLobby.id) return;
+            // Capture old status before updating
+            string oldStatus = _currentLobby.status;
             _currentLobby = newLobby;
-            ProcessLobbyUpdate(newLobby);
+            ProcessLobbyUpdate(newLobby, oldStatus);
         }
 
         internal void ClearCurrentLobby()
@@ -355,16 +359,22 @@ namespace PlayFlow
             _events.InvokeLobbyLeft();
         }
         
-        private void ProcessLobbyUpdate(Lobby lobby)
+        private void ProcessLobbyUpdate(Lobby lobby, string oldStatus = null)
         {
             if (lobby == null) return;
             CheckForPlayerChanges(lobby);
             _events.InvokeLobbyUpdated(lobby);
-            
+
             // Handle status-specific events
             switch (lobby.status)
             {
                 case "in_game":
+                    // Fire OnMatchFound when transitioning from in_queue to in_game (matchmaking flow)
+                    if (oldStatus == "in_queue")
+                    {
+                        _events.InvokeMatchFound(lobby);
+                    }
+
                     if (!_hasFiredMatchRunningEvent)
                     {
                         var connectionInfo = GetGameServerConnectionInfo();
@@ -376,20 +386,12 @@ namespace PlayFlow
                         }
                     }
                     break;
-                    
-                case "match_found":
-                    // Fire match found event when transitioning to match_found status
-                    if (_currentLobby?.status == "in_queue")
-                    {
-                        _events.InvokeMatchFound(lobby);
-                    }
-                    break;
-                    
+
                 case "waiting":
                     // Reset the match running flag when returning to waiting
                     _hasFiredMatchRunningEvent = false;
                     break;
-                    
+
                 case "in_queue":
                     // Already handled by FindMatch method
                     break;
