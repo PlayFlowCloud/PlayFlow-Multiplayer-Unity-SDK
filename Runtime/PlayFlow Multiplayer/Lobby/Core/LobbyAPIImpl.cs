@@ -312,6 +312,16 @@ namespace PlayFlow
                 }
             }
         }
+
+        public IEnumerator SendHeartbeat(string lobbyId, string playerId, Action onSuccess, Action<string> onError)
+        {
+            var url = $"{_baseUrl}/lobbies/{lobbyId}/players/{playerId}/heartbeat?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
+
+            yield return _networkManager.Post(url, "{}", _apiKey, (response) =>
+            {
+                onSuccess?.Invoke();
+            }, onError);
+        }
     }
 }
  

@@ -38,6 +38,7 @@ namespace PlayFlow
         IEnumerator UpdateLobby(string lobbyId, string requesterId, Newtonsoft.Json.Linq.JObject payload, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator FindLobbyByPlayerId(string playerId, Action<Lobby> onSuccess, Action<string> onError);
         IEnumerator DeleteLobby(string lobbyId, string requesterId, Action onSuccess, Action<string> onError);
+        IEnumerator SendHeartbeat(string lobbyId, string playerId, Action onSuccess, Action<string> onError);
     }
     
     public interface IEventDispatcher

@@ -36,6 +36,28 @@ namespace PlayFlow
         [SerializeField] private float _requestTimeout = 30f;
         [Tooltip("Connection timeout in seconds")]
         [SerializeField] private float _connectionTimeout = 10f;
+        [Header("Heartbeat")]
+        [Tooltip("Enable automatic heartbeat to keep player connection alive")]
+        [SerializeField] private bool _enableHeartbeat = false;
+
+        public bool EnableHeartbeat
+        {
+            get => _enableHeartbeat;
+            set
+            {
+                _enableHeartbeat = value;
+                if (_runtimeSettings != null) _runtimeSettings.enableHeartbeat = value;
+
+                if (Application.isPlaying && IsInLobby)
+                {
+                    if (value) StartHeartbeat();
+                    else StopHeartbeat();
+                }
+            }
+        }
+        [Tooltip("Heartbeat interval in seconds (minimum 15 seconds)")]
+        [Range(15f, 300f)]
+        [SerializeField] private float _heartbeatInterval = 30f;
         [Header("Debug")]
         [Tooltip("Enable debug logging")]
         [SerializeField] private bool _debugLogging = false;
@@ -46,6 +68,7 @@ namespace PlayFlow
         private PlayFlowSettings _runtimeSettings;
         private bool _hasFiredMatchRunningEvent;
         private HashSet<string> _previousPlayerIds = new HashSet<string>();
+        private Coroutine _heartbeatCoroutine;
 
         // --- Merged Session state fields ---
         private LobbyState _currentState = LobbyState.Disconnected;
@@ -86,6 +109,7 @@ namespace PlayFlow
         public float RefreshInterval => _refreshInterval;
         public bool AutoRefresh => _autoRefresh;
         public bool Debugging => _debugLogging;
+        public float HeartbeatInterval => _heartbeatInterval;
         
         private void Awake()
         {
@@ -101,6 +125,10 @@ namespace PlayFlow
             _refreshInterval = Mathf.Max(3f, _refreshInterval);
             _requestTimeout = Mathf.Max(5f, _requestTimeout);
             _connectionTimeout = Mathf.Max(5f, _connectionTimeout);
+            _heartbeatInterval = Mathf.Max(15f, _heartbeatInterval);
+
+            // Trigger property setter for Inspector changes
+            if (Application.isPlaying) EnableHeartbeat = _enableHeartbeat;
         }
         
         private void CreateRuntimeSettings()
@@ -115,6 +143,8 @@ namespace PlayFlow
             _runtimeSettings.retryDelay = _retryDelay;
             _runtimeSettings.requestTimeout = _requestTimeout;
             _runtimeSettings.connectionTimeout = _connectionTimeout;
+            _runtimeSettings.enableHeartbeat = _enableHeartbeat;
+            _runtimeSettings.heartbeatInterval = _heartbeatInterval;
             _runtimeSettings.debugLogging = _debugLogging;
         }
         
@@ -313,8 +343,11 @@ namespace PlayFlow
         
         public void ForceRefresh() { _refreshManager?.ForceRefresh(); }
 
+
+
         public void Disconnect()
         {
+            StopHeartbeat();
             ClearCurrentLobby();
             _playerId = null;
             ChangeState(LobbyState.Disconnected);
@@ -350,6 +383,12 @@ namespace PlayFlow
             }
 
             ProcessLobbyUpdate(lobby, oldStatus);
+
+            // Start heartbeat when joining a lobby
+            if (lobby != null)
+            {
+                StartHeartbeat();
+            }
         }
 
         internal void UpdateCurrentLobby(Lobby newLobby)
@@ -364,6 +403,7 @@ namespace PlayFlow
         internal void ClearCurrentLobby()
         {
             if (_currentLobby == null) return;
+            StopHeartbeat();
             _currentLobby = null;
             _previousPlayerIds.Clear();
             ChangeState(LobbyState.Connected);
@@ -433,6 +473,7 @@ namespace PlayFlow
         
         private void OnDestroy()
         {
+            StopHeartbeat();
             if (_refreshManager != null) { _refreshManager.OnLobbyListRefreshed -= HandleLobbyListRefreshed; }
             if (Instance == this) { Instance = null; }
             if (_runtimeSettings != null) { DestroyImmediate(_runtimeSettings); }
@@ -526,6 +567,45 @@ namespace PlayFlow
                 return null;
             }
             return Lobby.GetPrimaryConnectionInfo(CurrentLobby);
+        }
+
+        private void StartHeartbeat()
+        {
+            if (!_enableHeartbeat || !IsInLobby) return;
+            StopHeartbeat();
+            _heartbeatCoroutine = StartCoroutine(HeartbeatCoroutine());
+        }
+
+        private void StopHeartbeat()
+        {
+            if (_heartbeatCoroutine != null)
+            {
+                StopCoroutine(_heartbeatCoroutine);
+                _heartbeatCoroutine = null;
+            }
+        }
+
+        private IEnumerator HeartbeatCoroutine()
+        {
+            while (IsInLobby && _enableHeartbeat)
+            {
+                if (_debugLogging)
+                {
+                    Debug.Log($"[PlayFlowLobbyManager] Sending heartbeat for player {PlayerId} in lobby {CurrentLobbyId}");
+                }
+
+                StartCoroutine(_operations.SendHeartbeatCoroutine(CurrentLobbyId, PlayerId,
+                    () => {
+                        if (_debugLogging) Debug.Log("[PlayFlowLobbyManager] Heartbeat sent successfully");
+                    },
+                    error => {
+                        if (_debugLogging) Debug.LogWarning($"[PlayFlowLobbyManager] Heartbeat failed: {error}");
+                    }));
+
+                yield return new WaitForSeconds(_heartbeatInterval);
+
+                if (!IsInLobby || !_enableHeartbeat) break;
+            }
         }
     }
 }

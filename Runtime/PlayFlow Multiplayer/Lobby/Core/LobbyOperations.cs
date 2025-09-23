@@ -162,6 +162,12 @@ namespace PlayFlow
             if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
             yield return _api.FindLobbyByPlayerId(playerId, onSuccess, onError);
         }
+
+        public IEnumerator SendHeartbeatCoroutine(string lobbyId, string playerId, Action onSuccess, Action<string> onError)
+        {
+            if (_api == null) { onError?.Invoke("Lobby API not initialized"); yield break; }
+            yield return _api.SendHeartbeat(lobbyId, playerId, onSuccess, onError);
+        }
         
         public IEnumerator StartMatchmakingCoroutine(string lobbyId, string requesterId, string mode, Action<Lobby> onSuccess, Action<string> onError)
         {

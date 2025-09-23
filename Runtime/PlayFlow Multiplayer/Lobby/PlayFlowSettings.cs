@@ -38,6 +38,14 @@ namespace PlayFlow
         [Tooltip("Connection timeout in seconds")]
         public float connectionTimeout = 10f;
         
+        [Header("Heartbeat")]
+        [Tooltip("Enable automatic heartbeat to keep player connection alive")]
+        public bool enableHeartbeat = false;
+
+        [Tooltip("Heartbeat interval in seconds (minimum 15 seconds)")]
+        [Range(15f, 300f)]
+        public float heartbeatInterval = 30f;
+
         [Header("Debug")]
         [Tooltip("Enable debug logging")]
         public bool debugLogging = false;
@@ -47,6 +55,7 @@ namespace PlayFlow
             refreshInterval = Mathf.Max(3f, refreshInterval);
             requestTimeout = Mathf.Max(5f, requestTimeout);
             connectionTimeout = Mathf.Max(5f, connectionTimeout);
+            heartbeatInterval = Mathf.Max(15f, heartbeatInterval);
         }
     }
 } 
