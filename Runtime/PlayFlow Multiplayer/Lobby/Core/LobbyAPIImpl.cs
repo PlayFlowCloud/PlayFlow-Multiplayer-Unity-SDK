@@ -315,9 +315,16 @@ namespace PlayFlow
 
         public IEnumerator SendHeartbeat(string lobbyId, string playerId, Action onSuccess, Action<string> onError)
         {
-            var url = $"{_baseUrl}/lobbies/{lobbyId}/players/{playerId}/heartbeat?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
+            var url = $"{_baseUrl}/lobbies/{lobbyId}/heartbeat?name={UnityWebRequest.EscapeURL(_lobbyConfigName)}";
 
-            yield return _networkManager.Post(url, "{}", _apiKey, (response) =>
+            var payload = new JObject
+            {
+                ["playerId"] = playerId
+            };
+
+            var json = payload.ToString();
+
+            yield return _networkManager.Post(url, json, _apiKey, (response) =>
             {
                 onSuccess?.Invoke();
             }, onError);

@@ -1,6 +1,6 @@
 {
   "name": "com.playflow.multiplayer-unity-sdk",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "displayName": "PlayFlow Multiplayer Unity SDK",
   "description": "The official Unity SDK for the PlayFlow Multiplayer Platform. This package provides tools for game server management, lobbies, and matchmaking.",
   "unity": "2020.3",
@@ -17,6 +17,6 @@
   ],
   "author": {
     "name": "PlayFlow",
-    "url": "https://getplayflow.com"
+    "url": "https://playflowcloud.com"
   }
 }
