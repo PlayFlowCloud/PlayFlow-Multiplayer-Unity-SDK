@@ -71,7 +71,18 @@ namespace PlayFlow
         // --- Settings access ---
         public string ApiKey => _apiKey;
         public string BaseUrl => _baseUrl;
-        public string DefaultLobbyConfig => _defaultLobbyConfig;
+        public string DefaultLobbyConfig
+        {
+            get => _defaultLobbyConfig;
+            set
+            {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    _defaultLobbyConfig = value;
+                    if (_runtimeSettings != null) _runtimeSettings.defaultLobbyConfig = value;
+                }
+            }
+        }
         public float RefreshInterval => _refreshInterval;
         public bool AutoRefresh => _autoRefresh;
         public bool Debugging => _debugLogging;
