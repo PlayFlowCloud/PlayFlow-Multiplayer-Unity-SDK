@@ -407,13 +407,17 @@ namespace PlayFlow
             _currentLobby = null;
             _previousPlayerIds.Clear();
             ChangeState(LobbyState.Connected);
-            _events.InvokeLobbyLeft();
+            _events.InvokeLobbyLeft(); // This will trigger LobbyRefreshManager to handle SSE disconnect properly
         }
         
         private void ProcessLobbyUpdate(Lobby lobby, string oldStatus = null)
         {
             if (lobby == null) return;
             CheckForPlayerChanges(lobby);
+
+            // Don't process further if we've been removed from the lobby
+            if (_currentLobby == null || _currentLobby.id != lobby.id) return;
+
             _events.InvokeLobbyUpdated(lobby);
 
             // Handle status-specific events
@@ -453,6 +457,40 @@ namespace PlayFlow
         {
             if (this == null || !gameObject.activeInHierarchy) return;
             var newPlayerIds = newLobby?.players != null ? new HashSet<string>(newLobby.players) : new HashSet<string>();
+
+            // FIRST: Validate that we should still be in this lobby
+            // This catches cases where we never tracked previous players or missed updates
+            if (IsInLobby && !newPlayerIds.Contains(PlayerId))
+            {
+                if (_debugLogging)
+                {
+                    Debug.Log($"[PlayFlowLobbyManager] Current player {PlayerId} is not in lobby {newLobby.id} - disconnecting SSE and clearing lobby state");
+                }
+
+                // IMMEDIATELY disconnect SSE before anything else
+                var sseManager = LobbySseManager.Instance;
+                if (sseManager != null)
+                {
+                    sseManager.Disconnect();
+                }
+
+                // Then clear the lobby and exit
+                ClearCurrentLobby();
+
+                // Refresh lobby list so player sees updated available lobbies
+                _refreshManager?.ForceRefresh();
+
+                return; // Don't process further changes
+            }
+
+            // THEN: Check for specific player changes (joins/leaves of other players)
+            if (_previousPlayerIds.Contains(PlayerId) && !newPlayerIds.Contains(PlayerId))
+            {
+                // This is redundant now but kept for backward compatibility
+                // The above check should catch this case
+                return;
+            }
+
             if (_previousPlayerIds.Count == 0 && newPlayerIds.Count > 0)
             {
                 foreach (var playerId in newPlayerIds) { _events.InvokePlayerJoined(PlayerAction.Joined(playerId)); }
