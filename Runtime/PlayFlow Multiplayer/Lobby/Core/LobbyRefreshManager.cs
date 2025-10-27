@@ -90,16 +90,20 @@ namespace PlayFlow
         private IEnumerator RefreshLoop()
         {
             var wait = new WaitForSeconds(_settings.refreshInterval);
-            
+
             while (enabled)
             {
                 yield return wait;
-                
+
                 if (_lobbyManager != null && _lobbyManager.IsInLobby && _lobbyManager.CurrentLobby != null)
                 {
+                    // Heartbeat watchdog - ensure heartbeats are always running when in lobby
+                    // This runs regardless of SSE/polling state or deduplication
+                    _lobbyManager.EnsureHeartbeatRunning();
+
                     // Skip regular refresh if SSE is connected
                     bool shouldPoll = !_isSSEConnected || _currentSSELobbyId != _lobbyManager.CurrentLobby.id;
-                    
+
                     if (shouldPoll)
                     {
                         if (_settings.debugLogging)

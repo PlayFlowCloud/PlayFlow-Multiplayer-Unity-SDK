@@ -443,6 +443,12 @@ namespace PlayFlow
                     break;
 
                 case "waiting":
+                    // Fire OnMatchEnded if transitioning from in_game to waiting (e.g., server shutdown)
+                    if (oldStatus == "in_game")
+                    {
+                        _events.InvokeMatchEnded(lobby);
+                    }
+
                     // Reset the match running flag when returning to waiting
                     _hasFiredMatchRunningEvent = false;
                     break;
@@ -607,11 +613,34 @@ namespace PlayFlow
             return Lobby.GetPrimaryConnectionInfo(CurrentLobby);
         }
 
+        /// <summary>
+        /// Public method to ensure heartbeat is running. Called by refresh manager watchdog.
+        /// </summary>
+        internal void EnsureHeartbeatRunning()
+        {
+            if (_enableHeartbeat && IsInLobby && _heartbeatCoroutine == null)
+            {
+                if (_debugLogging)
+                {
+                    Debug.LogWarning($"[PlayFlowLobbyManager] Heartbeat was stopped! Restarting for lobby {CurrentLobbyId}");
+                }
+                StartHeartbeat();
+            }
+        }
+
         private void StartHeartbeat()
         {
             if (!_enableHeartbeat || !IsInLobby) return;
-            StopHeartbeat();
+
+            // Don't restart if already running
+            if (_heartbeatCoroutine != null) return;
+
             _heartbeatCoroutine = StartCoroutine(HeartbeatCoroutine());
+
+            if (_debugLogging)
+            {
+                Debug.Log($"[PlayFlowLobbyManager] Heartbeat started for lobby {CurrentLobbyId}");
+            }
         }
 
         private void StopHeartbeat()
@@ -620,6 +649,11 @@ namespace PlayFlow
             {
                 StopCoroutine(_heartbeatCoroutine);
                 _heartbeatCoroutine = null;
+
+                if (_debugLogging)
+                {
+                    Debug.Log($"[PlayFlowLobbyManager] Heartbeat stopped");
+                }
             }
         }
 
